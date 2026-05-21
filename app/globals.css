@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 195 38% 97%;
+  --foreground: 202 42% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 202 42% 12%;
+  --border: 196 24% 86%;
+  --input: 196 24% 86%;
+  --ring: 189 94% 31%;
+  --primary: 187 86% 28%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 190 32% 92%;
+  --muted-foreground: 201 18% 39%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  min-height: 100vh;
+  color: hsl(var(--foreground));
+  background:
+    linear-gradient(120deg, rgba(240, 253, 250, 0.96), rgba(239, 246, 255, 0.92)),
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.16), transparent 32%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 28%);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
