@@ -5,7 +5,37 @@ export type TeachingPlan = {
   pptOutline: string[];
   interactionQuestions: string[];
   homework: string[];
+  lessonSummary?: {
+    totalDuration: string;
+    totalSlides: number;
+    totalQuestions: number;
+    totalInteractions: number;
+    teachingStyle: string;
+  };
   slides: Slide[];
+};
+
+export type SpeakerScript = {
+  opening: string;
+  explanation: string;
+  transition: string;
+  boardWriting: string[];
+  commonMistakes: string[];
+};
+
+export type PaceControl = {
+  duration: string;
+  explainTime: string;
+  questionTime: string;
+  interactionType: string;
+  paceWarning: string;
+};
+
+export type QuestionGuide = {
+  warmUpQuestion: string;
+  deepQuestion: string;
+  followUpQuestion: string;
+  expectedAnswer: string;
 };
 
 export type Slide = {
@@ -19,6 +49,10 @@ export type Slide = {
   paceTip: string;
   teacherTip: string;
   discussionPrompt: string;
+  boardWriting: string[];
+  speakerScript: SpeakerScript;
+  paceControl: PaceControl;
+  questionGuide: QuestionGuide;
   speakerAssistant: {
     talkScript: string;
     keyPoints: string[];
@@ -72,12 +106,16 @@ export function buildTeachingPrompt(
 3. 不要空话，不要泛泛而谈。
 4. 适合高中地理课堂，突出地理综合思维、人地协调观和案例分析。
 5. 内容不要过长，控制在 30 秒内可返回。
-6. 将 PPT 大纲拆成 4-6 个 slides，每页都要包含 title、content、teacherNote、question、imagePrompt、duration、interactionCount、paceTip、teacherTip、discussionPrompt、speakerAssistant、quiz。
+6. 将 PPT 大纲拆成 4-6 个 slides，每页都要包含 title、content、teacherNote、question、imagePrompt、duration、interactionCount、paceTip、teacherTip、discussionPrompt、boardWriting、speakerScript、paceControl、questionGuide、speakerAssistant、quiz。
 7. imagePrompt 使用适合课堂投影的高清教育科技风关键词，不要写绘画风。
 8. quiz 用于课堂互动，type 只能是 single、trueFalse、raiseHand；选择题给 3 个 options，判断题给“正确/错误”，举手互动给 2-3 个可举手选项。
-9. speakerAssistant 要简洁，给老师快速扫读：talkScript 控制在 80 字内，keyPoints 2-3 条，studentQuestions 1-2 条，teacherAnswers 与问题一一对应。
-10. Slide 内容、互动问题、讲解提示都要体现“${teachingStyle}”风格。
-11. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
+9. speakerScript 是老师可直接照着讲的课堂话术，不要像论文；opening、explanation、transition 每段控制在 60 字内。
+10. boardWriting 是板书建议，2-4 条，像真实黑板标题。
+11. paceControl 要包含讲解时间、互动时间、互动类型和节奏提醒。
+12. questionGuide 要有导入问题、深度问题、追问和参考回答，问题要有层次。
+13. speakerAssistant 要简洁，给老师快速扫读：talkScript 控制在 80 字内，keyPoints 2-3 条，studentQuestions 1-2 条，teacherAnswers 与问题一一对应。
+14. Slide 内容、互动问题、讲解提示都要体现“${teachingStyle}”风格。
+15. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
 
 JSON 格式如下：
 {
@@ -95,6 +133,27 @@ JSON 格式如下：
       "paceTip": "建议此处停顿并提问",
       "teacherTip": "建议此处进入课堂讨论，让学生先说现象再归纳概念。",
       "discussionPrompt": "分组讨论：气候变化会先影响生活中的哪些场景？",
+      "boardWriting": ["一、气候变化的表现", "二、证据来自长期观测"],
+      "speakerScript": {
+        "opening": "同学们，先想一想，最近几年你感受到天气有什么变化？",
+        "explanation": "这一页我们不是急着下结论，而是把生活感受转化为可以验证的地理问题。",
+        "transition": "有了问题，下一步就要看证据是否支持我们的判断。",
+        "boardWriting": ["气候变化：长期趋势", "分析路径：证据-原因-影响"],
+        "commonMistakes": ["把一次天气现象当作气候变化", "只说变热，不说明证据"]
+      },
+      "paceControl": {
+        "duration": "5分钟",
+        "explainTime": "3分钟",
+        "questionTime": "2分钟",
+        "interactionType": "提问",
+        "paceWarning": "本页不要讲太满，重点让学生先说出现象。"
+      },
+      "questionGuide": {
+        "warmUpQuestion": "你最近感受到哪些异常天气？",
+        "deepQuestion": "这些感受怎样才能转化为科学证据？",
+        "followUpQuestion": "一次高温能不能证明全球变暖？为什么？",
+        "expectedAnswer": "不能。需要长期、多地区、连续观测的数据趋势。"
+      },
       "speakerAssistant": {
         "talkScript": "先用生活现象导入，再把学生观察收束到气候变化的核心问题。",
         "keyPoints": ["区分天气与气候", "建立证据意识"],
@@ -115,7 +174,105 @@ JSON 格式如下：
 `.trim();
 }
 
-export const demoTeachingPlan: TeachingPlan = {
+type DemoSlide = Omit<
+  Slide,
+  "boardWriting" | "speakerScript" | "paceControl" | "questionGuide"
+> &
+  Partial<
+    Pick<Slide, "boardWriting" | "speakerScript" | "paceControl" | "questionGuide">
+  >;
+
+type DemoTeachingPlan = Omit<TeachingPlan, "slides"> & {
+  slides: DemoSlide[];
+};
+
+function minutesFrom(duration: string) {
+  const match = duration.match(/\d+/);
+  return match ? Number(match[0]) : 4;
+}
+
+function enhanceSlide(slide: DemoSlide, index: number, total: number): Slide {
+  const boardWriting =
+    slide.boardWriting && slide.boardWriting.length > 0
+      ? slide.boardWriting
+      : [
+          `一、${slide.title}`,
+          ...slide.content.slice(0, 2).map((item, itemIndex) => `${itemIndex + 2}、${item}`)
+        ].slice(0, 4);
+  const duration = slide.duration || `${index === 0 ? 4 : 5}分钟`;
+  const minutes = minutesFrom(duration);
+  const questionTime = Math.max(1, Math.min(2, slide.interactionCount || 1));
+  const explainTime = Math.max(1, minutes - questionTime);
+
+  return {
+    ...slide,
+    boardWriting,
+    speakerScript: slide.speakerScript || {
+      opening: `同学们，我们先看“${slide.title}”，想一想它和今天的核心问题有什么关系。`,
+      explanation: slide.speakerAssistant.talkScript || slide.teacherNote,
+      transition:
+        index === total - 1
+          ? "最后我们把这节课的结论收束成一条清晰的分析路径。"
+          : "带着这个判断，我们继续看下一页的证据或案例。",
+      boardWriting,
+      commonMistakes: [
+        "只记结论，不说明依据",
+        "回答问题时没有使用本页关键词"
+      ]
+    },
+    paceControl: slide.paceControl || {
+      duration,
+      explainTime: `${explainTime}分钟`,
+      questionTime: `${questionTime}分钟`,
+      interactionType:
+        slide.quiz.type === "raiseHand"
+          ? "举手互动"
+          : slide.quiz.type === "single"
+            ? "小测验"
+            : "提问",
+      paceWarning: slide.paceTip || "本页注意控制讲解时间，留出学生表达。"
+    },
+    questionGuide: slide.questionGuide || {
+      warmUpQuestion: slide.question,
+      deepQuestion: slide.discussionPrompt,
+      followUpQuestion: "你能用本页证据再补充一个理由吗？",
+      expectedAnswer:
+        slide.speakerAssistant.teacherAnswers[0] ||
+        "回到材料证据，再用本页核心概念说明。"
+    }
+  };
+}
+
+function enhanceTeachingPlan(plan: DemoTeachingPlan): TeachingPlan {
+  const slides = plan.slides.map((slide, index) =>
+    enhanceSlide(slide, index, plan.slides.length)
+  );
+  const totalInteractions = slides.reduce(
+    (sum, slide) => sum + slide.interactionCount,
+    0
+  );
+  const totalQuestions =
+    plan.interactionQuestions.length +
+    slides.reduce((sum, slide) => sum + slide.speakerAssistant.studentQuestions.length, 0);
+  const totalMinutes = slides.reduce(
+    (sum, slide) => sum + minutesFrom(slide.duration),
+    0
+  );
+
+  return {
+    ...plan,
+    slides,
+    lessonSummary: plan.lessonSummary || {
+      totalDuration: `${totalMinutes || 40}分钟`,
+      totalSlides: slides.length,
+      totalQuestions,
+      totalInteractions,
+      teachingStyle: "演示模板"
+    }
+  };
+}
+
+export const demoTeachingPlan: TeachingPlan = enhanceTeachingPlan({
   lessonPlan: [
     "导入：展示近百年全球平均气温变化曲线，引导学生判断气候变化的主要趋势。",
     "新授：区分气候变化与全球变暖，结合温室气体资料分析人为活动对地表能量收支的影响。",
@@ -236,13 +393,13 @@ export const demoTeachingPlan: TeachingPlan = {
     "任选一个地区，分析气候变化可能带来的两项影响。",
     "设计一条校园低碳行动建议，并说明其地理依据。"
   ]
-};
+});
 
 export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
   const normalized = `${input.grade}${input.subject}${input.topic}`.toLowerCase();
 
   if (normalized.includes("历史") || normalized.includes("鸦片")) {
-    return {
+    return enhanceTeachingPlan({
       lessonPlan: [
         "导入：展示鸦片输入与白银外流材料，提出“为什么一场战争改变了中国近代历史？”",
         "新授：从贸易冲突、禁烟运动和英国侵略三个层面梳理鸦片战争爆发原因。",
@@ -339,11 +496,11 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
         "用 100 字说明鸦片战争爆发的根本原因。",
         "完成一道材料题：结合条约内容分析中国社会变化。"
       ]
-    };
+    });
   }
 
   if (normalized.includes("数学") || normalized.includes("分数")) {
-    return {
+    return enhanceTeachingPlan({
       lessonPlan: [
         "导入：用分蛋糕情境复习同分母分数含义。",
         "新授：通过图形模型理解同分母分数加减法规则。",
@@ -440,7 +597,7 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
         "写出一道易错题，并说明错误原因。",
         "用图形解释 1/2 + 1/4。"
       ]
-    };
+    });
   }
 
   return demoTeachingPlan;

@@ -28,7 +28,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PaceControlCard } from "@/components/PaceControlCard";
 import { ResultCard } from "@/components/ResultCard";
+import { SpeakerScriptCard } from "@/components/SpeakerScriptCard";
 import type { Slide, TeachingPlan } from "@/lib/prompt";
 
 type FormState = {
@@ -47,7 +49,10 @@ const defaultForm: FormState = {
   teachingStyle: "启发式"
 };
 
-const moduleTitles: Record<Exclude<keyof TeachingPlan, "slides">, string> = {
+const moduleTitles: Record<
+  Exclude<keyof TeachingPlan, "slides" | "lessonSummary">,
+  string
+> = {
   lessonPlan: "教案结构",
   pptOutline: "PPT 大纲",
   interactionQuestions: "课堂互动问题",
@@ -55,7 +60,8 @@ const moduleTitles: Record<Exclude<keyof TeachingPlan, "slides">, string> = {
 };
 
 type AnimationMode = "fade" | "slide" | "zoom";
-type PresentationAudience = "student" | "speaker";
+type PresentationAudience = "student" | "teacher";
+type ResultViewMode = "teacher" | "student";
 
 const teachingStyles: Array<{
   value: FormState["teachingStyle"];
@@ -183,16 +189,22 @@ function getPaceSummary(plan: TeachingPlan) {
   );
 
   return {
-    totalDuration: `${totalMinutes || 40}分钟`,
-    totalSlides: plan.slides.length,
-    totalInteractions
+    totalDuration: plan.lessonSummary?.totalDuration || `${totalMinutes || 40}分钟`,
+    totalSlides: plan.lessonSummary?.totalSlides || plan.slides.length,
+    totalQuestions:
+      plan.lessonSummary?.totalQuestions ||
+      plan.interactionQuestions.length + plan.slides.length,
+    totalInteractions: plan.lessonSummary?.totalInteractions || totalInteractions,
+    teachingStyle: plan.lessonSummary?.teachingStyle || "AI 课堂"
   };
 }
 
 function planToText(plan: TeachingPlan) {
   const modules = Object.entries(moduleTitles)
     .map(([key, title]) => {
-      const items = plan[key as keyof TeachingPlan];
+      const items = plan[
+        key as Exclude<keyof TeachingPlan, "slides" | "lessonSummary">
+      ];
       return `${title}\n${items.map((item, index) => `${index + 1}. ${item}`).join("\n")}`;
     })
     .join("\n\n");
@@ -200,7 +212,7 @@ function planToText(plan: TeachingPlan) {
   const slides = plan.slides
     .map(
       (slide, index) =>
-        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.duration}｜互动 ${slide.interactionCount} 次｜${slide.paceTip}\n教师提示：${slide.teacherTip}\n讲解稿：${slide.speakerAssistant.talkScript}\n课堂提问：${slide.question}\n讨论提示：${slide.discussionPrompt}\n小测：${slide.quiz.question}（${slide.quiz.answer}）\n图片提示词：${slide.imagePrompt}`
+        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.paceControl.duration}｜讲解 ${slide.paceControl.explainTime}｜互动 ${slide.paceControl.questionTime}\n开场：${slide.speakerScript.opening}\n讲解：${slide.speakerScript.explanation}\n板书：${slide.boardWriting.join("；")}\n课堂提问：${slide.questionGuide.warmUpQuestion}\n追问：${slide.questionGuide.followUpQuestion}\n图片提示词：${slide.imagePrompt}`
     )
     .join("\n\n");
 
@@ -215,7 +227,8 @@ export function InputForm() {
   const [animationMode, setAnimationMode] = useState<AnimationMode>("slide");
   const [focusMode, setFocusMode] = useState(true);
   const [presentationAudience, setPresentationAudience] =
-    useState<PresentationAudience>("student");
+    useState<PresentationAudience>("teacher");
+  const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("teacher");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -516,7 +529,7 @@ export function InputForm() {
           ) : null}
 
           {paceSummary ? (
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div className="rounded-lg border border-cyan-900/10 bg-slate-950 p-4 text-white">
                 <div className="flex items-center gap-2 text-cyan-100">
                   <Clock3 className="h-4 w-4" />
@@ -550,6 +563,17 @@ export function InputForm() {
                   {paceSummary.totalInteractions} 次互动
                 </p>
               </div>
+              <div className="rounded-lg border border-cyan-900/10 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <MessageCircleQuestion className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                    Questions
+                  </span>
+                </div>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  {paceSummary.totalQuestions} 个问题
+                </p>
+              </div>
             </div>
           ) : null}
 
@@ -564,6 +588,22 @@ export function InputForm() {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <div className="flex rounded-md border border-slate-200 bg-white p-1 shadow-sm">
+                  {(["teacher", "student"] as ResultViewMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setResultViewMode(mode)}
+                      className={`rounded px-3 py-1.5 text-xs font-semibold transition ${
+                        resultViewMode === mode
+                          ? "bg-cyan-600 text-white"
+                          : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {mode === "teacher" ? "教师视图" : "学生视图"}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex rounded-md border border-slate-200 bg-white p-1 shadow-sm">
                   {(Object.keys(animationLabels) as AnimationMode[]).map((mode) => (
                     <button
@@ -592,17 +632,34 @@ export function InputForm() {
               </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              {plan.slides.map((slide, index) => (
-                <SlideCard
-                  key={`${slide.title}-${index}`}
-                  slide={slide}
-                  index={index}
-                  total={plan.slides.length}
-                  active={index === presentationIndex}
-                  onSelect={() => setPresentationIndex(index)}
-                />
-              ))}
+              {plan.slides.map((slide, index) =>
+                resultViewMode === "teacher" ? (
+                  <SlideCard
+                    key={`${slide.title}-${index}`}
+                    slide={slide}
+                    index={index}
+                    total={plan.slides.length}
+                    active={index === presentationIndex}
+                    onSelect={() => setPresentationIndex(index)}
+                  />
+                ) : (
+                  <StudentSlideCard
+                    key={`${slide.title}-${index}`}
+                    slide={slide}
+                    index={index}
+                    total={plan.slides.length}
+                    active={index === presentationIndex}
+                    onSelect={() => setPresentationIndex(index)}
+                  />
+                )
+              )}
             </div>
+            {resultViewMode === "teacher" && plan.slides[presentationIndex] ? (
+              <div className="grid gap-4 xl:grid-cols-[1fr_0.72fr]">
+                <SpeakerScriptCard slide={plan.slides[presentationIndex]} />
+                <PaceControlCard slide={plan.slides[presentationIndex]} />
+              </div>
+            ) : null}
           </section>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -625,7 +682,7 @@ export function InputForm() {
           onToggleFocus={() => setFocusMode((current) => !current)}
           onToggleAudience={() =>
             setPresentationAudience((current) =>
-              current === "student" ? "speaker" : "student"
+              current === "student" ? "teacher" : "student"
             )
           }
           onPrev={() => goToSlide("prev")}
@@ -740,6 +797,59 @@ function SlideCard({
   );
 }
 
+function StudentSlideCard({
+  slide,
+  index,
+  total,
+  active,
+  onSelect
+}: {
+  slide: Slide;
+  index: number;
+  total: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const visual = getSlideVisual(slide.imagePrompt, index);
+
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.42, ease: "easeOut" }}
+      className={`cursor-pointer overflow-hidden rounded-lg border bg-white shadow-[0_18px_50px_rgba(15,23,42,0.10)] transition ${
+        active ? "border-cyan-400 ring-2 ring-cyan-300/60" : "border-cyan-900/10"
+      }`}
+      onClick={onSelect}
+    >
+      <ImagePromptPanel prompt={slide.imagePrompt} visual={visual} compact />
+      <div className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="rounded-md bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700">
+            {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+          </span>
+          <span className="text-xs font-medium text-slate-400">学生视图</span>
+        </div>
+        <h3 className="text-2xl font-semibold leading-tight text-slate-950">
+          {slide.title}
+        </h3>
+        <ul className="mt-4 space-y-2 text-base leading-7 text-slate-700">
+          {slide.content.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-500" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 rounded-md bg-slate-950 px-4 py-3 text-base font-semibold leading-7 text-cyan-50">
+          请同学们思考：{slide.questionGuide.warmUpQuestion}
+        </p>
+      </div>
+    </motion.article>
+  );
+}
+
 function ImagePromptPanel({
   prompt,
   visual,
@@ -812,7 +922,7 @@ function PresentationView({
 }) {
   const visual = getSlideVisual(slide.imagePrompt, index);
   const animationProps = getAnimationProps(animationMode);
-  const showSpeakerNotes = audience === "speaker";
+  const showTeacherView = audience === "teacher";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-950 p-5 text-white md:p-8">
@@ -829,7 +939,7 @@ function PresentationView({
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={onToggleAudience}>
             <Layers3 className="h-4 w-4" />
-            {showSpeakerNotes ? "学生视图" : "演讲者视图"}
+            {showTeacherView ? "学生视图" : "教师视图"}
           </Button>
           <Button type="button" variant="secondary" onClick={onToggleFocus}>
             <Maximize2 className="h-4 w-4" />
@@ -844,7 +954,7 @@ function PresentationView({
 
       <div
         className={`relative grid flex-1 gap-5 overflow-hidden ${
-          showSpeakerNotes && !focusMode
+          showTeacherView && !focusMode
             ? "xl:grid-cols-[1fr_0.82fr_0.42fr]"
             : "lg:grid-cols-[1.1fr_0.9fr]"
         }`}
@@ -908,7 +1018,7 @@ function PresentationView({
               >
                 <ImagePromptPanel prompt={slide.imagePrompt} visual={visual} />
               </motion.div>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className={`grid gap-4 ${showTeacherView ? "md:grid-cols-2" : ""}`}>
                 <motion.div
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -919,9 +1029,10 @@ function PresentationView({
                     AI 提问
                   </p>
                   <p className="mt-3 text-2xl font-semibold leading-9">
-                    请同学们思考：{slide.question}
+                    请同学们思考：{slide.questionGuide.warmUpQuestion}
                   </p>
                 </motion.div>
+                {showTeacherView ? (
                 <div className="grid gap-4">
                   <motion.div
                     initial={{ opacity: 0, y: 22 }}
@@ -960,30 +1071,49 @@ function PresentationView({
                     </div>
                   </motion.div>
                 </div>
+                ) : null}
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
 
-        {showSpeakerNotes && !focusMode ? (
+        {showTeacherView && !focusMode ? (
           <aside className="hidden min-h-0 flex-col gap-4 overflow-y-auto rounded-lg border border-white/10 bg-white/8 p-4 backdrop-blur xl:flex">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
-                演讲者备注
+                教师视图
               </p>
-              <p className="mt-3 text-base leading-7 text-slate-200">{slide.teacherNote}</p>
+              <p className="mt-3 text-base leading-7 text-slate-100">
+                {slide.speakerScript.opening}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {slide.speakerScript.explanation}
+              </p>
             </div>
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold text-emerald-100">节奏提示</p>
-              <p className="mt-2 text-sm leading-6 text-slate-200">{slide.paceTip}</p>
-              <p className="mt-2 text-xs leading-5 text-slate-400">
-                {slide.duration} · 预计互动 {slide.interactionCount} 次
+              <p className="mt-2 text-sm leading-6 text-slate-200">
+                {slide.paceControl.paceWarning}
               </p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                讲解 {slide.paceControl.explainTime} · 互动 {slide.paceControl.questionTime} · {slide.paceControl.interactionType}
+              </p>
+            </div>
+            <div className="rounded-md border border-emerald-300/20 bg-emerald-300/10 p-3">
+              <p className="text-xs font-semibold text-emerald-100">黑板便签</p>
+              <div className="mt-2 space-y-1.5 text-sm leading-6 text-emerald-50">
+                {slide.boardWriting.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </div>
             </div>
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold text-violet-100">讨论组织</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">
-                {slide.discussionPrompt}
+                {slide.questionGuide.deepQuestion}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                追问：{slide.questionGuide.followUpQuestion}
               </p>
             </div>
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">

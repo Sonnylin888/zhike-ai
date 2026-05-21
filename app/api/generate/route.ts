@@ -36,12 +36,19 @@ function normalizeTeachingPlan(plan: Partial<TeachingPlan>): TeachingPlan {
     : [];
   const homework = Array.isArray(plan.homework) ? plan.homework : [];
 
+  const normalizedSlides = normalizeSlides(
+    plan.slides,
+    pptOutline,
+    interactionQuestions
+  );
+
   return {
     lessonPlan,
     pptOutline,
     interactionQuestions,
     homework,
-    slides: normalizeSlides(plan.slides, pptOutline, interactionQuestions)
+    lessonSummary: normalizeLessonSummary(plan.lessonSummary, normalizedSlides, interactionQuestions),
+    slides: normalizedSlides
   };
 }
 
@@ -81,6 +88,10 @@ function normalizeSlides(
       discussionPrompt:
         slide.discussionPrompt?.trim() ||
         `围绕“${slide.question || slide.title || "本页问题"}”进行 1 分钟同桌讨论，并准备一个证据。`,
+      boardWriting: normalizeBoardWriting(slide, index),
+      speakerScript: normalizeSpeakerScript(slide, index),
+      paceControl: normalizePaceControl(slide, index),
+      questionGuide: normalizeQuestionGuide(slide, index),
       speakerAssistant: normalizeSpeakerAssistant(slide, index),
       quiz: normalizeQuiz(slide.quiz, slide.question, index)
     }));
@@ -109,10 +120,143 @@ function normalizeSlides(
       paceTip: "建议此处停顿并提问，确认学生能说出判断依据。",
       teacherTip: "围绕本页材料做一次短讨论，让学生用地理术语表达判断依据。",
       discussionPrompt: `小组讨论：${interactionQuestions[index] || "本页材料能支持哪些地理判断？"}`,
+      boardWriting: normalizeBoardWriting(undefined, index, title || detail),
+      speakerScript: normalizeSpeakerScript(undefined, index, title || detail),
+      paceControl: normalizePaceControl(undefined, index),
+      questionGuide: normalizeQuestionGuide(undefined, index, title || detail),
       speakerAssistant: normalizeSpeakerAssistant(undefined, index, title || detail),
       quiz: normalizeQuiz(undefined, interactionQuestions[index], index)
     };
   });
+}
+
+function parseMinutes(duration: string | undefined) {
+  const match = duration?.match(/\d+/);
+  return match ? Number(match[0]) : 4;
+}
+
+function normalizeLessonSummary(
+  summary: Partial<NonNullable<TeachingPlan["lessonSummary"]>> | undefined,
+  slides: Slide[],
+  interactionQuestions: string[]
+): NonNullable<TeachingPlan["lessonSummary"]> {
+  const totalDuration = slides.reduce(
+    (sum, slide) => sum + parseMinutes(slide.duration),
+    0
+  );
+  const totalInteractions = slides.reduce(
+    (sum, slide) => sum + slide.interactionCount,
+    0
+  );
+
+  return {
+    totalDuration: summary?.totalDuration?.trim() || `${totalDuration || 40}分钟`,
+    totalSlides: summary?.totalSlides || slides.length,
+    totalQuestions:
+      summary?.totalQuestions ||
+      interactionQuestions.length + slides.length,
+    totalInteractions: summary?.totalInteractions || totalInteractions,
+    teachingStyle: summary?.teachingStyle?.trim() || "AI 课堂"
+  };
+}
+
+function normalizeBoardWriting(
+  slide: Partial<Slide> | undefined,
+  index: number,
+  fallbackTitle = "本页重点"
+): string[] {
+  if (Array.isArray(slide?.boardWriting) && slide.boardWriting.length > 0) {
+    return slide.boardWriting.filter(Boolean).slice(0, 4);
+  }
+
+  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
+  return [`一、${title}`, "二、核心证据", "三、课堂结论"];
+}
+
+function normalizeSpeakerScript(
+  slide: Partial<Slide> | undefined,
+  index: number,
+  fallbackTitle = "本页内容"
+): Slide["speakerScript"] {
+  const script = slide?.speakerScript;
+  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
+  const boardWriting = normalizeBoardWriting(slide, index, title);
+
+  return {
+    opening:
+      script?.opening?.trim() ||
+      `同学们，我们先看“${title}”，用一个问题把这页内容带起来。`,
+    explanation:
+      script?.explanation?.trim() ||
+      slide?.speakerAssistant?.talkScript ||
+      slide?.teacherNote ||
+      "这一页重点是先观察材料，再说出依据，最后形成课堂结论。",
+    transition:
+      script?.transition?.trim() ||
+      "接下来我们带着这个判断，继续看下一页的证据和应用。",
+    boardWriting:
+      Array.isArray(script?.boardWriting) && script.boardWriting.length > 0
+        ? script.boardWriting.filter(Boolean).slice(0, 4)
+        : boardWriting,
+    commonMistakes:
+      Array.isArray(script?.commonMistakes) && script.commonMistakes.length > 0
+        ? script.commonMistakes.filter(Boolean).slice(0, 3)
+        : ["只说结论，没有说明依据", "把短期现象当作长期规律"]
+  };
+}
+
+function normalizePaceControl(
+  slide: Partial<Slide> | undefined,
+  index: number
+): Slide["paceControl"] {
+  const pace = slide?.paceControl;
+  const duration = pace?.duration?.trim() || slide?.duration || `${index === 0 ? 4 : 5}分钟`;
+  const minutes = parseMinutes(duration);
+  const questionMinutes = Math.max(1, Math.min(2, slide?.interactionCount || 1));
+
+  return {
+    duration,
+    explainTime: pace?.explainTime?.trim() || `${Math.max(1, minutes - questionMinutes)}分钟`,
+    questionTime: pace?.questionTime?.trim() || `${questionMinutes}分钟`,
+    interactionType:
+      pace?.interactionType?.trim() ||
+      (slide?.quiz?.type === "raiseHand"
+        ? "举手互动"
+        : slide?.quiz?.type === "single"
+          ? "小测验"
+          : "提问"),
+    paceWarning:
+      pace?.paceWarning?.trim() ||
+      slide?.paceTip ||
+      "本页不要讲太久，重点留时间给学生表达。"
+  };
+}
+
+function normalizeQuestionGuide(
+  slide: Partial<Slide> | undefined,
+  index: number,
+  fallbackTitle = "本页内容"
+): Slide["questionGuide"] {
+  const guide = slide?.questionGuide;
+  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
+
+  return {
+    warmUpQuestion:
+      guide?.warmUpQuestion?.trim() ||
+      slide?.question ||
+      `看到“${title}”，你首先想到什么？`,
+    deepQuestion:
+      guide?.deepQuestion?.trim() ||
+      slide?.discussionPrompt ||
+      "这个结论背后有哪些证据可以支持？",
+    followUpQuestion:
+      guide?.followUpQuestion?.trim() ||
+      "你能再补充一个理由或反例吗？",
+    expectedAnswer:
+      guide?.expectedAnswer?.trim() ||
+      slide?.speakerAssistant?.teacherAnswers?.[0] ||
+      "应回到材料证据，并用本页核心概念解释。"
+  };
 }
 
 function normalizeSpeakerAssistant(
