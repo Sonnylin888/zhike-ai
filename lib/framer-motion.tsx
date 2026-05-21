@@ -22,6 +22,7 @@ type MotionProps = {
   animate?: MotionValue;
   exit?: MotionValue;
   transition?: {
+    delay?: number;
     duration?: number;
     ease?: string;
   };
@@ -82,7 +83,8 @@ function createMotion<T extends keyof React.JSX.IntrinsicElements>(tag: T) {
       style: {
         ...style,
         ...motionStyle,
-        transition: cssTransition
+        transition: cssTransition,
+        transitionDelay: transition?.delay ? `${transition.delay}s` : undefined
       }
     });
   });
@@ -94,5 +96,7 @@ export function AnimatePresence({ children }: { children: ReactNode; mode?: stri
 
 export const motion = {
   article: createMotion("article"),
-  div: createMotion("div")
+  div: createMotion("div"),
+  h2: createMotion("h2"),
+  li: createMotion("li")
 };

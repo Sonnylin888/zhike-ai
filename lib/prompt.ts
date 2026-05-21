@@ -16,6 +16,7 @@ export type Slide = {
   imagePrompt: string;
   duration: string;
   teacherTip: string;
+  discussionPrompt: string;
   quiz: {
     type: "single" | "trueFalse" | "raiseHand";
     question: string;
@@ -54,7 +55,7 @@ export function buildTeachingPrompt(
 3. 不要空话，不要泛泛而谈。
 4. 适合高中地理课堂，突出地理综合思维、人地协调观和案例分析。
 5. 内容不要过长，控制在 30 秒内可返回。
-6. 将 PPT 大纲拆成 4-6 个 slides，每页都要包含 title、content、teacherNote、question、imagePrompt、duration、teacherTip、quiz。
+6. 将 PPT 大纲拆成 4-6 个 slides，每页都要包含 title、content、teacherNote、question、imagePrompt、duration、teacherTip、discussionPrompt、quiz。
 7. imagePrompt 使用适合课堂投影的高清教育科技风关键词，不要写绘画风。
 8. quiz 用于课堂互动，type 只能是 single、trueFalse、raiseHand；选择题给 3 个 options，判断题给“正确/错误”，举手互动给 2-3 个可举手选项。
 9. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
@@ -72,6 +73,7 @@ JSON 格式如下：
       "imagePrompt": "全球变暖、地球、温室效应、气候变化、高清课堂投影、科技感",
       "duration": "5分钟",
       "teacherTip": "建议此处进入课堂讨论，让学生先说现象再归纳概念。",
+      "discussionPrompt": "分组讨论：气候变化会先影响生活中的哪些场景？",
       "quiz": {
         "type": "single",
         "question": "下列哪项最能作为全球变暖的证据？",
@@ -108,6 +110,7 @@ export const demoTeachingPlan: TeachingPlan = {
       imagePrompt: "气候变化、地球、课堂投影、天气数据、科技蓝",
       duration: "4分钟",
       teacherTip: "先让学生举例，再把生活经验收束到本课核心问题。",
+      discussionPrompt: "请同桌互相补充一个近年极端天气案例，并判断它能否作为气候变化证据。",
       quiz: {
         type: "raiseHand",
         question: "你认为身边最明显的气候变化感受是什么？",
@@ -123,6 +126,7 @@ export const demoTeachingPlan: TeachingPlan = {
       imagePrompt: "全球气温曲线、二氧化碳浓度、冰川融化、数据可视化",
       duration: "6分钟",
       teacherTip: "建议切换到读图节奏，追问“先描述，再解释”。",
+      discussionPrompt: "小组讨论：如果两条曲线同步上升，能否直接说明因果关系？还需要哪些证据？",
       quiz: {
         type: "single",
         question: "读图时最先应该确认什么？",
@@ -138,6 +142,7 @@ export const demoTeachingPlan: TeachingPlan = {
       imagePrompt: "温室效应、太阳辐射、地球能量收支、人类活动排放",
       duration: "7分钟",
       teacherTip: "此页适合板书“短波进入、长波受阻”的机制链条。",
+      discussionPrompt: "请用一句话向同学解释“温室效应增强”的能量传递过程。",
       quiz: {
         type: "trueFalse",
         question: "温室效应完全由人类活动造成。",
@@ -153,6 +158,7 @@ export const demoTeachingPlan: TeachingPlan = {
       imagePrompt: "低碳城市、绿色校园、可再生能源、城市热岛效应",
       duration: "5分钟",
       teacherTip: "建议收束为小组快答，用一个校园行动对应一个地理依据。",
+      discussionPrompt: "快速讨论：选择一项校园低碳行动，说出它对应的减排或适应逻辑。",
       quiz: {
         type: "raiseHand",
         question: "你更支持哪类校园低碳行动？",

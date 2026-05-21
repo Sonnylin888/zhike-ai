@@ -69,6 +69,9 @@ function normalizeSlides(
         slide.teacherTip?.trim() ||
         slide.teacherNote?.trim() ||
         "建议此处进入课堂讨论，先让学生观察，再引导归纳。",
+      discussionPrompt:
+        slide.discussionPrompt?.trim() ||
+        `围绕“${slide.question || slide.title || "本页问题"}”进行 1 分钟同桌讨论，并准备一个证据。`,
       quiz: normalizeQuiz(slide.quiz, slide.question, index)
     }));
   }
@@ -93,6 +96,7 @@ function normalizeSlides(
       imagePrompt: `${title || detail}、课堂投影、AI 教学、地理可视化`,
       duration: `${index === 0 ? 4 : 5}分钟`,
       teacherTip: "围绕本页材料做一次短讨论，让学生用地理术语表达判断依据。",
+      discussionPrompt: `小组讨论：${interactionQuestions[index] || "本页材料能支持哪些地理判断？"}`,
       quiz: normalizeQuiz(undefined, interactionQuestions[index], index)
     };
   });

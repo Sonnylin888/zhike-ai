@@ -7,6 +7,7 @@ import {
   Clock3,
   Hand,
   ImageIcon,
+  Layers3,
   Loader2,
   Maximize2,
   Minimize2,
@@ -48,6 +49,7 @@ const moduleTitles: Record<Exclude<keyof TeachingPlan, "slides">, string> = {
 };
 
 type AnimationMode = "fade" | "slide" | "zoom";
+type PresentationAudience = "student" | "speaker";
 
 const animationLabels: Record<AnimationMode, string> = {
   fade: "Fade",
@@ -57,25 +59,38 @@ const animationLabels: Record<AnimationMode, string> = {
 
 const slideVisuals = [
   {
+    keywords: ["warming", "climate", "global", "earth", "气候", "变暖", "地球"],
     url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80",
-    accent: "from-cyan-400/70 via-slate-950/20 to-emerald-300/40"
+    accent: "from-cyan-400/70 via-slate-950/20 to-emerald-300/40",
+    label: "Climate signal"
   },
   {
+    keywords: ["data", "chart", "curve", "co2", "temperature", "数据", "曲线", "二氧化碳"],
     url: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=80",
-    accent: "from-sky-300/70 via-slate-950/10 to-amber-200/50"
+    accent: "from-sky-300/70 via-slate-950/10 to-amber-200/50",
+    label: "Data landscape"
   },
   {
+    keywords: ["glacier", "ice", "sea", "water", "冰川", "海平面", "融化"],
     url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=80",
-    accent: "from-teal-300/60 via-slate-950/20 to-rose-200/40"
+    accent: "from-teal-300/60 via-slate-950/20 to-rose-200/40",
+    label: "Cryosphere"
   },
   {
+    keywords: ["city", "carbon", "energy", "green", "campus", "低碳", "城市", "校园", "能源"],
     url: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1400&q=80",
-    accent: "from-indigo-300/55 via-slate-950/20 to-lime-200/45"
+    accent: "from-indigo-300/55 via-slate-950/20 to-lime-200/45",
+    label: "Low-carbon future"
   }
 ];
 
-function getSlideVisual(index: number) {
-  return slideVisuals[index % slideVisuals.length];
+function getSlideVisual(prompt: string, index: number) {
+  const normalized = prompt.toLowerCase();
+  const matched = slideVisuals.find((visual) =>
+    visual.keywords.some((keyword) => normalized.includes(keyword.toLowerCase()))
+  );
+
+  return matched || slideVisuals[index % slideVisuals.length];
 }
 
 function getQuizLabel(type: Slide["quiz"]["type"]) {
@@ -117,7 +132,7 @@ function planToText(plan: TeachingPlan) {
   const slides = plan.slides
     .map(
       (slide, index) =>
-        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.duration}｜${slide.teacherTip}\n教师提示：${slide.teacherNote}\n课堂提问：${slide.question}\n小测：${slide.quiz.question}（${slide.quiz.answer}）\n图片提示词：${slide.imagePrompt}`
+        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.duration}｜${slide.teacherTip}\n教师提示：${slide.teacherNote}\n课堂提问：${slide.question}\n讨论提示：${slide.discussionPrompt}\n小测：${slide.quiz.question}（${slide.quiz.answer}）\n图片提示词：${slide.imagePrompt}`
     )
     .join("\n\n");
 
@@ -131,6 +146,8 @@ export function InputForm() {
   const [presenting, setPresenting] = useState(false);
   const [animationMode, setAnimationMode] = useState<AnimationMode>("slide");
   const [focusMode, setFocusMode] = useState(true);
+  const [presentationAudience, setPresentationAudience] =
+    useState<PresentationAudience>("student");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -214,7 +231,6 @@ export function InputForm() {
 
   async function startPresentation() {
     if (!plan?.slides.length) return;
-    setPresentationIndex(0);
     setPresenting(true);
     await document.documentElement.requestFullscreen?.().catch(() => undefined);
   }
@@ -420,6 +436,8 @@ export function InputForm() {
                   slide={slide}
                   index={index}
                   total={plan.slides.length}
+                  active={index === presentationIndex}
+                  onSelect={() => setPresentationIndex(index)}
                 />
               ))}
             </div>
@@ -441,7 +459,13 @@ export function InputForm() {
           total={plan.slides.length}
           animationMode={animationMode}
           focusMode={focusMode}
+          audience={presentationAudience}
           onToggleFocus={() => setFocusMode((current) => !current)}
+          onToggleAudience={() =>
+            setPresentationAudience((current) =>
+              current === "student" ? "speaker" : "student"
+            )
+          }
           onPrev={() => goToSlide("prev")}
           onNext={() => goToSlide("next")}
           onExit={stopPresentation}
@@ -454,13 +478,17 @@ export function InputForm() {
 function SlideCard({
   slide,
   index,
-  total
+  total,
+  active,
+  onSelect
 }: {
   slide: Slide;
   index: number;
   total: number;
+  active: boolean;
+  onSelect: () => void;
 }) {
-  const visual = getSlideVisual(index);
+  const visual = getSlideVisual(slide.imagePrompt, index);
 
   return (
     <motion.article
@@ -468,7 +496,12 @@ function SlideCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.42, ease: "easeOut" }}
-      className="overflow-hidden rounded-lg border border-cyan-900/10 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.10)]"
+      className={`cursor-pointer overflow-hidden rounded-lg border bg-white shadow-[0_18px_50px_rgba(15,23,42,0.10)] transition ${
+        active
+          ? "border-cyan-400 ring-2 ring-cyan-300/60"
+          : "border-cyan-900/10 opacity-80 hover:opacity-100"
+      }`}
+      onClick={onSelect}
     >
       <div className="grid min-h-full md:grid-cols-[0.92fr_1.08fr]">
         <ImagePromptPanel prompt={slide.imagePrompt} visual={visual} compact />
@@ -477,6 +510,11 @@ function SlideCard({
             <span className="rounded-md bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-700">
               {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
             </span>
+            {active ? (
+              <span className="rounded bg-slate-950 px-2 py-1 text-xs font-semibold text-cyan-100">
+                当前页
+              </span>
+            ) : null}
             <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
               <Timer className="h-3.5 w-3.5" />
               {slide.duration}
@@ -503,6 +541,9 @@ function SlideCard({
             <p className="text-sm leading-6 text-slate-700">{slide.teacherNote}</p>
             <p className="border-t border-slate-200 pt-3 text-sm font-medium text-slate-900">
               请同学们思考：{slide.question}
+            </p>
+            <p className="rounded-md bg-cyan-50 px-3 py-2 text-sm leading-6 text-cyan-900">
+              AI 讨论提示：{slide.discussionPrompt}
             </p>
             <div className="rounded-md border border-cyan-100 bg-white p-3">
               <div className="mb-2 flex items-center justify-between">
@@ -542,7 +583,7 @@ function ImagePromptPanel({
   return (
     <div
       className={`relative flex min-h-56 flex-col justify-between overflow-hidden bg-slate-950 p-5 text-white ${
-        compact ? "" : "min-h-[42vh] rounded-lg p-8"
+        compact ? "min-h-72" : "min-h-[52vh] rounded-lg p-8"
       }`}
     >
       <img
@@ -562,11 +603,14 @@ function ImagePromptPanel({
         </div>
         <Wand2 className="h-4 w-4 text-cyan-100/80" />
       </div>
+      <div className="relative w-fit rounded border border-white/16 bg-white/10 px-2.5 py-1 text-xs font-semibold text-cyan-50 backdrop-blur">
+        {visual.label}
+      </div>
       <div className="relative">
         <p className={compact ? "text-lg font-semibold leading-7" : "text-3xl font-semibold leading-tight"}>
           {prompt}
         </p>
-        <p className="mt-3 text-sm text-cyan-100/80">Unsplash mock 图｜高清课堂投影风格</p>
+        <p className="mt-3 text-sm text-cyan-100/80">按 imagePrompt 匹配｜高清课堂投影风格</p>
       </div>
     </div>
   );
@@ -578,7 +622,9 @@ function PresentationView({
   total,
   animationMode,
   focusMode,
+  audience,
   onToggleFocus,
+  onToggleAudience,
   onPrev,
   onNext,
   onExit
@@ -588,13 +634,16 @@ function PresentationView({
   total: number;
   animationMode: AnimationMode;
   focusMode: boolean;
+  audience: PresentationAudience;
   onToggleFocus: () => void;
+  onToggleAudience: () => void;
   onPrev: () => void;
   onNext: () => void;
   onExit: () => void;
 }) {
-  const visual = getSlideVisual(index);
+  const visual = getSlideVisual(slide.imagePrompt, index);
   const animationProps = getAnimationProps(animationMode);
+  const showSpeakerNotes = audience === "speaker";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-950 p-5 text-white md:p-8">
@@ -609,6 +658,10 @@ function PresentationView({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button type="button" variant="secondary" onClick={onToggleAudience}>
+            <Layers3 className="h-4 w-4" />
+            {showSpeakerNotes ? "学生视图" : "演讲者视图"}
+          </Button>
           <Button type="button" variant="secondary" onClick={onToggleFocus}>
             <Maximize2 className="h-4 w-4" />
             {focusMode ? "显示备注" : "聚焦模式"}
@@ -620,16 +673,27 @@ function PresentationView({
         </div>
       </div>
 
-      <div className={`relative grid flex-1 gap-5 overflow-hidden ${focusMode ? "lg:grid-cols-[1.1fr_0.9fr]" : "xl:grid-cols-[1fr_0.82fr_0.42fr]"}`}>
+      <div
+        className={`relative grid flex-1 gap-5 overflow-hidden ${
+          showSpeakerNotes && !focusMode
+            ? "xl:grid-cols-[1fr_0.82fr_0.42fr]"
+            : "lg:grid-cols-[1.1fr_0.9fr]"
+        }`}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={`${slide.title}-${index}`}
             {...animationProps}
-            transition={{ duration: 0.42, ease: "easeOut" }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
             className="grid min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.05fr_0.95fr] xl:col-span-2"
           >
             <div className="flex min-h-0 flex-col justify-center rounded-lg border border-white/10 bg-white/8 p-7 backdrop-blur">
-              <div className="mb-6 flex flex-wrap items-center gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.38, delay: 0.08 }}
+                className="mb-6 flex flex-wrap items-center gap-3"
+              >
                 <span className="rounded bg-cyan-300 px-3 py-1 text-sm font-bold text-slate-950">
                   {String(index + 1).padStart(2, "0")}
                 </span>
@@ -637,55 +701,98 @@ function PresentationView({
                   <Clock3 className="h-4 w-4" />
                   {slide.duration}
                 </span>
-              </div>
-              <h2 className="text-5xl font-semibold leading-tight md:text-7xl">
+              </motion.div>
+              <motion.h2
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.46, delay: 0.18 }}
+                className="text-5xl font-semibold leading-tight md:text-7xl"
+              >
                 {slide.title}
-              </h2>
+              </motion.h2>
               <ul className="mt-9 space-y-5 text-2xl leading-relaxed text-slate-50 md:text-[2rem]">
                 {slide.content.map((item, itemIndex) => (
-                  <li key={`${slide.title}-present-${itemIndex}`} className="flex gap-4">
+                  <motion.li
+                    key={`${slide.title}-present-${itemIndex}`}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.42, delay: 0.34 + itemIndex * 0.14 }}
+                    className="flex gap-4"
+                  >
                     <span className="mt-4 h-3 w-3 shrink-0 rounded-full bg-cyan-300" />
                     <span>{item}</span>
-                  </li>
+                  </motion.li>
                 ))}
               </ul>
             </div>
 
             <div className="flex min-h-0 flex-col gap-4">
-              <ImagePromptPanel prompt={slide.imagePrompt} visual={visual} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.48, delay: 0.72 }}
+                className="min-h-0"
+              >
+                <ImagePromptPanel prompt={slide.imagePrompt} visual={visual} />
+              </motion.div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-5">
+                <motion.div
+                  initial={{ opacity: 0, y: 22 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.42, delay: 0.88 }}
+                  className="rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-5"
+                >
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-100">
                     AI 提问
                   </p>
                   <p className="mt-3 text-2xl font-semibold leading-9">
                     请同学们思考：{slide.question}
                   </p>
-                </div>
-                <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-5">
-                  <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100">
-                    <Hand className="h-4 w-4" />
-                    {getQuizLabel(slide.quiz.type)}
-                  </p>
-                  <p className="mt-3 text-xl font-semibold leading-8">{slide.quiz.question}</p>
-                  <div className="mt-4 grid gap-2">
-                    {slide.quiz.options.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className="rounded-md border border-white/12 bg-white/8 px-3 py-2 text-left text-base font-medium text-slate-100 transition hover:border-cyan-200/50 hover:bg-white/14"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
+                </motion.div>
+                <div className="grid gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, y: 22 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.42, delay: 1.02 }}
+                    className="rounded-lg border border-violet-300/20 bg-violet-300/10 p-5"
+                  >
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-100">
+                      AI 讨论提示
+                    </p>
+                    <p className="mt-3 text-lg font-semibold leading-7">
+                      {slide.discussionPrompt}
+                    </p>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 22 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.42, delay: 1.16 }}
+                    className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-5"
+                  >
+                    <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                      <Hand className="h-4 w-4" />
+                      {getQuizLabel(slide.quiz.type)}
+                    </p>
+                    <p className="mt-3 text-xl font-semibold leading-8">{slide.quiz.question}</p>
+                    <div className="mt-4 grid gap-2">
+                      {slide.quiz.options.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="rounded-md border border-white/12 bg-white/8 px-3 py-2 text-left text-base font-medium text-slate-100 transition hover:border-cyan-200/50 hover:bg-white/14"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
                 </div>
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
 
-        {!focusMode ? (
+        {showSpeakerNotes && !focusMode ? (
           <aside className="hidden min-h-0 flex-col gap-4 overflow-hidden rounded-lg border border-white/10 bg-white/8 p-4 backdrop-blur xl:flex">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
@@ -696,6 +803,12 @@ function PresentationView({
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold text-emerald-100">节奏提示</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">{slide.teacherTip}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
+              <p className="text-xs font-semibold text-violet-100">讨论组织</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">
+                {slide.discussionPrompt}
+              </p>
             </div>
             <div className="mt-auto grid grid-cols-4 gap-2">
               {Array.from({ length: total }).map((_, itemIndex) => (
