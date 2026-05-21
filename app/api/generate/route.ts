@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import {
   buildTeachingPrompt,
-  demoTeachingPlan,
+  getDemoTeachingPlan,
   type Slide,
   type TeachingPlan
 } from "@/lib/prompt";
@@ -65,6 +65,15 @@ function normalizeSlides(
         slide.imagePrompt?.trim() ||
         `${slide.title || pptOutline[index] || "地理课堂"}、课堂演示、AI 配图、科技感`,
       duration: slide.duration?.trim() || `${index === 0 ? 4 : 5}分钟`,
+      interactionCount:
+        typeof slide.interactionCount === "number"
+          ? slide.interactionCount
+          : index % 2 === 0
+            ? 1
+            : 2,
+      paceTip:
+        slide.paceTip?.trim() ||
+        "建议此处停顿 10 秒，让学生先表达，再进入讲解。",
       teacherTip:
         slide.teacherTip?.trim() ||
         slide.teacherNote?.trim() ||
@@ -72,6 +81,7 @@ function normalizeSlides(
       discussionPrompt:
         slide.discussionPrompt?.trim() ||
         `围绕“${slide.question || slide.title || "本页问题"}”进行 1 分钟同桌讨论，并准备一个证据。`,
+      speakerAssistant: normalizeSpeakerAssistant(slide, index),
       quiz: normalizeQuiz(slide.quiz, slide.question, index)
     }));
   }
@@ -95,11 +105,43 @@ function normalizeSlides(
         "你能从这页材料中发现哪些地理信息？",
       imagePrompt: `${title || detail}、课堂投影、AI 教学、地理可视化`,
       duration: `${index === 0 ? 4 : 5}分钟`,
+      interactionCount: index % 2 === 0 ? 1 : 2,
+      paceTip: "建议此处停顿并提问，确认学生能说出判断依据。",
       teacherTip: "围绕本页材料做一次短讨论，让学生用地理术语表达判断依据。",
       discussionPrompt: `小组讨论：${interactionQuestions[index] || "本页材料能支持哪些地理判断？"}`,
+      speakerAssistant: normalizeSpeakerAssistant(undefined, index, title || detail),
       quiz: normalizeQuiz(undefined, interactionQuestions[index], index)
     };
   });
+}
+
+function normalizeSpeakerAssistant(
+  slide: Partial<Slide> | undefined,
+  index: number,
+  fallbackTitle = "本页内容"
+): Slide["speakerAssistant"] {
+  const assistant = slide?.speakerAssistant;
+  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
+  const question = slide?.question || "学生可能会追问本页结论如何得出。";
+
+  return {
+    talkScript:
+      assistant?.talkScript?.trim() ||
+      `围绕“${title}”先讲情境，再引导学生说出证据和结论。`,
+    keyPoints:
+      Array.isArray(assistant?.keyPoints) && assistant.keyPoints.length > 0
+        ? assistant.keyPoints.filter(Boolean).slice(0, 3)
+        : [title, "证据解读", "课堂追问"],
+    studentQuestions:
+      Array.isArray(assistant?.studentQuestions) &&
+      assistant.studentQuestions.length > 0
+        ? assistant.studentQuestions.filter(Boolean).slice(0, 2)
+        : [question],
+    teacherAnswers:
+      Array.isArray(assistant?.teacherAnswers) && assistant.teacherAnswers.length > 0
+        ? assistant.teacherAnswers.filter(Boolean).slice(0, 2)
+        : ["先回到材料证据，再用本页核心概念解释。"]
+  };
 }
 
 function normalizeQuiz(
@@ -145,10 +187,11 @@ function normalizeQuiz(
 
 function demoFallbackResponse(
   textbook: ReturnType<typeof findTextbookContent>,
+  input: TeacherInput,
   source = "demo-fallback"
 ) {
   return NextResponse.json({
-    plan: demoTeachingPlan,
+    plan: getDemoTeachingPlan(input),
     source,
     textbook
   });
@@ -179,7 +222,7 @@ export async function POST(request: Request) {
       : process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";
 
     if (!apiKey) {
-      return demoFallbackResponse(textbook);
+      return demoFallbackResponse(textbook, input);
     }
 
     try {
@@ -191,7 +234,7 @@ export async function POST(request: Request) {
       const completion = await client.chat.completions.create({
         model,
         temperature: 0.35,
-        max_tokens: 1400,
+        max_tokens: 2200,
         messages: [
           {
             role: "system",
@@ -219,7 +262,7 @@ export async function POST(request: Request) {
       });
     } catch (aiError) {
       console.error("AI generation failed, using demo fallback:", aiError);
-      return demoFallbackResponse(textbook, "ai-fallback");
+      return demoFallbackResponse(textbook, input, "ai-fallback");
     }
   } catch (error) {
     console.error(error);

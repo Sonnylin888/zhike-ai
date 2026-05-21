@@ -1,18 +1,22 @@
 "use client";
 
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Clipboard,
   Clock3,
+  Gauge,
   Hand,
   ImageIcon,
   Layers3,
   Loader2,
   Maximize2,
   Minimize2,
+  MessageCircleQuestion,
   MonitorPlay,
   MousePointerClick,
+  Presentation,
   RefreshCw,
   Sparkles,
   Timer,
@@ -32,13 +36,15 @@ type FormState = {
   subject: string;
   topic: string;
   textbookVersion: string;
+  teachingStyle: "启发式" | "应试型" | "互动型" | "公开课型";
 };
 
 const defaultForm: FormState = {
   grade: "高中",
   subject: "地理",
   topic: "气候变化",
-  textbookVersion: "人教版"
+  textbookVersion: "人教版",
+  teachingStyle: "启发式"
 };
 
 const moduleTitles: Record<Exclude<keyof TeachingPlan, "slides">, string> = {
@@ -50,6 +56,46 @@ const moduleTitles: Record<Exclude<keyof TeachingPlan, "slides">, string> = {
 
 type AnimationMode = "fade" | "slide" | "zoom";
 type PresentationAudience = "student" | "speaker";
+
+const teachingStyles: Array<{
+  value: FormState["teachingStyle"];
+  hint: string;
+}> = [
+  { value: "启发式", hint: "问题链" },
+  { value: "应试型", hint: "考点/易错" },
+  { value: "互动型", hint: "讨论/小测" },
+  { value: "公开课型", hint: "节奏/展示" }
+];
+
+const demoTemplates: Array<FormState & { label: string; description: string }> = [
+  {
+    label: "高中地理｜气候变化",
+    description: "证据、机制、影响与低碳行动",
+    grade: "高中",
+    subject: "地理",
+    topic: "气候变化",
+    textbookVersion: "人教版",
+    teachingStyle: "启发式"
+  },
+  {
+    label: "初中历史｜鸦片战争",
+    description: "原因、条约与近代史开端",
+    grade: "初中",
+    subject: "历史",
+    topic: "鸦片战争",
+    textbookVersion: "人教版",
+    teachingStyle: "公开课型"
+  },
+  {
+    label: "小学数学｜分数加减法",
+    description: "分数单位、算法与易错辨析",
+    grade: "小学",
+    subject: "数学",
+    topic: "分数加减法",
+    textbookVersion: "人教版",
+    teachingStyle: "互动型"
+  }
+];
 
 const animationLabels: Record<AnimationMode, string> = {
   fade: "Fade",
@@ -121,6 +167,28 @@ function getAnimationProps(mode: AnimationMode) {
   };
 }
 
+function getMinutes(duration: string) {
+  const match = duration.match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function getPaceSummary(plan: TeachingPlan) {
+  const totalMinutes = plan.slides.reduce(
+    (sum, slide) => sum + getMinutes(slide.duration),
+    0
+  );
+  const totalInteractions = plan.slides.reduce(
+    (sum, slide) => sum + (slide.interactionCount || 0),
+    0
+  );
+
+  return {
+    totalDuration: `${totalMinutes || 40}分钟`,
+    totalSlides: plan.slides.length,
+    totalInteractions
+  };
+}
+
 function planToText(plan: TeachingPlan) {
   const modules = Object.entries(moduleTitles)
     .map(([key, title]) => {
@@ -132,7 +200,7 @@ function planToText(plan: TeachingPlan) {
   const slides = plan.slides
     .map(
       (slide, index) =>
-        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.duration}｜${slide.teacherTip}\n教师提示：${slide.teacherNote}\n课堂提问：${slide.question}\n讨论提示：${slide.discussionPrompt}\n小测：${slide.quiz.question}（${slide.quiz.answer}）\n图片提示词：${slide.imagePrompt}`
+        `第 ${index + 1} 页：${slide.title}\n核心内容：${slide.content.join("；")}\n节奏：${slide.duration}｜互动 ${slide.interactionCount} 次｜${slide.paceTip}\n教师提示：${slide.teacherTip}\n讲解稿：${slide.speakerAssistant.talkScript}\n课堂提问：${slide.question}\n讨论提示：${slide.discussionPrompt}\n小测：${slide.quiz.question}（${slide.quiz.answer}）\n图片提示词：${slide.imagePrompt}`
     )
     .join("\n\n");
 
@@ -154,6 +222,10 @@ export function InputForm() {
   const [source, setSource] = useState("");
 
   const canCopy = useMemo(() => Boolean(plan), [plan]);
+  const paceSummary = useMemo(
+    () => (plan ? getPaceSummary(plan) : null),
+    [plan]
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -256,7 +328,32 @@ export function InputForm() {
     <div className="space-y-6">
       <Card className="overflow-hidden border-cyan-900/10 bg-white/92 shadow-glow backdrop-blur">
         <CardContent className="p-5 md:p-6">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="mb-5 grid gap-3 md:grid-cols-3">
+            {demoTemplates.map((template) => (
+              <button
+                key={template.label}
+                type="button"
+                onClick={() => setForm(template)}
+                className={`rounded-lg border p-4 text-left transition ${
+                  form.grade === template.grade &&
+                  form.subject === template.subject &&
+                  form.topic === template.topic
+                    ? "border-cyan-400 bg-cyan-50 shadow-[0_12px_28px_rgba(8,145,178,0.12)]"
+                    : "border-slate-200 bg-white hover:border-cyan-200 hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                  <BookOpen className="h-4 w-4 text-cyan-600" />
+                  {template.label}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {template.description}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="grade">学段/年级</Label>
               <Input
@@ -304,11 +401,38 @@ export function InputForm() {
                 placeholder="人教版"
               />
             </div>
+            <div className="space-y-2">
+              <Label>教学风格</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {teachingStyles.map((style) => (
+                  <button
+                    key={style.value}
+                    type="button"
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        teachingStyle: style.value
+                      }))
+                    }
+                    className={`rounded-md border px-2.5 py-2 text-left transition ${
+                      form.teachingStyle === style.value
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="block text-xs font-semibold">{style.value}</span>
+                    <span className="mt-0.5 block text-[11px] opacity-70">
+                      {style.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              默认演示：高中地理｜人教版｜气候变化，生成后可直接进入大屏试讲。
+              当前风格：{form.teachingStyle}。选择模板后可直接生成一堂可试讲的 AI 课堂。
             </p>
             <div className="flex flex-wrap gap-3">
               <Button
@@ -386,8 +510,46 @@ export function InputForm() {
       {plan && !loading ? (
         <div className="space-y-5">
           {source === "demo-fallback" || source === "ai-fallback" ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              当前 AI 生成不可用，正在使用内置 Demo 结果，演示流程可继续。
+            <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+              演示模板已就绪：已生成可试讲的 AI 课堂内容，支持配图、互动与全屏演示。
+            </div>
+          ) : null}
+
+          {paceSummary ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-cyan-900/10 bg-slate-950 p-4 text-white">
+                <div className="flex items-center gap-2 text-cyan-100">
+                  <Clock3 className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                    Total Time
+                  </span>
+                </div>
+                <p className="mt-3 text-2xl font-semibold">
+                  {paceSummary.totalDuration}
+                </p>
+              </div>
+              <div className="rounded-lg border border-cyan-900/10 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Presentation className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                    Slides
+                  </span>
+                </div>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  {paceSummary.totalSlides} 页
+                </p>
+              </div>
+              <div className="rounded-lg border border-cyan-900/10 bg-white p-4">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Gauge className="h-4 w-4" />
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+                    Interactions
+                  </span>
+                </div>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  {paceSummary.totalInteractions} 次互动
+                </p>
+              </div>
             </div>
           ) : null}
 
@@ -519,6 +681,10 @@ function SlideCard({
               <Timer className="h-3.5 w-3.5" />
               {slide.duration}
             </span>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+              <Gauge className="h-3.5 w-3.5" />
+              {slide.interactionCount} 次
+            </span>
           </div>
           <h3 className="text-xl font-semibold leading-tight text-slate-950">
             {slide.title}
@@ -538,6 +704,9 @@ function SlideCard({
                 {slide.teacherTip}
               </span>
             </div>
+            <p className="rounded-md bg-slate-900 px-3 py-2 text-sm leading-6 text-cyan-50">
+              节奏：{slide.paceTip}
+            </p>
             <p className="text-sm leading-6 text-slate-700">{slide.teacherNote}</p>
             <p className="border-t border-slate-200 pt-3 text-sm font-medium text-slate-900">
               请同学们思考：{slide.question}
@@ -701,6 +870,10 @@ function PresentationView({
                   <Clock3 className="h-4 w-4" />
                   {slide.duration}
                 </span>
+                <span className="flex items-center gap-2 rounded border border-white/10 bg-white/8 px-3 py-1 text-sm font-semibold text-emerald-100">
+                  <Gauge className="h-4 w-4" />
+                  互动 {slide.interactionCount} 次
+                </span>
               </motion.div>
               <motion.h2
                 initial={{ opacity: 0, y: 24 }}
@@ -793,7 +966,7 @@ function PresentationView({
         </AnimatePresence>
 
         {showSpeakerNotes && !focusMode ? (
-          <aside className="hidden min-h-0 flex-col gap-4 overflow-hidden rounded-lg border border-white/10 bg-white/8 p-4 backdrop-blur xl:flex">
+          <aside className="hidden min-h-0 flex-col gap-4 overflow-y-auto rounded-lg border border-white/10 bg-white/8 p-4 backdrop-blur xl:flex">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
                 演讲者备注
@@ -802,13 +975,44 @@ function PresentationView({
             </div>
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold text-emerald-100">节奏提示</p>
-              <p className="mt-2 text-sm leading-6 text-slate-200">{slide.teacherTip}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">{slide.paceTip}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                {slide.duration} · 预计互动 {slide.interactionCount} 次
+              </p>
             </div>
             <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
               <p className="text-xs font-semibold text-violet-100">讨论组织</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">
                 {slide.discussionPrompt}
               </p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
+              <p className="flex items-center gap-2 text-xs font-semibold text-cyan-100">
+                <MessageCircleQuestion className="h-3.5 w-3.5" />
+                AI 演讲者助手
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-100">
+                {slide.speakerAssistant.talkScript}
+              </p>
+              <div className="mt-3 space-y-2">
+                {slide.speakerAssistant.keyPoints.map((point) => (
+                  <p key={point} className="text-xs leading-5 text-cyan-50">
+                    · {point}
+                  </p>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-white/10 pt-3">
+                {slide.speakerAssistant.studentQuestions.map((question, questionIndex) => (
+                  <div key={question} className="mb-2 last:mb-0">
+                    <p className="text-xs font-semibold text-amber-100">学生可能问</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-200">{question}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {slide.speakerAssistant.teacherAnswers[questionIndex] ||
+                        "回到材料证据，引导学生自己说出判断。"}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="mt-auto grid grid-cols-4 gap-2">
               {Array.from({ length: total }).map((_, itemIndex) => (

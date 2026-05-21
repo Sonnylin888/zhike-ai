@@ -5,6 +5,7 @@ export type TeacherInput = {
   subject: string;
   topic: string;
   textbookVersion: string;
+  teachingStyle?: "启发式" | "应试型" | "互动型" | "公开课型";
 };
 
 export type TextbookContent = typeof climateTextbook;
