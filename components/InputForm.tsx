@@ -35,6 +35,7 @@ import { ResultCard } from "@/components/ResultCard";
 import { SpeakerScriptCard } from "@/components/SpeakerScriptCard";
 import { SubjectModuleCard } from "@/components/SubjectModuleCard";
 import { TeachingReflectionCard } from "@/components/TeachingReflectionCard";
+import { TeachingConsole } from "@/components/TeachingConsole";
 import { WorkflowNavigation } from "@/components/WorkflowNavigation";
 import {
   getSubjectStyleOptions,
@@ -293,6 +294,10 @@ export function InputForm() {
   }, []);
 
   async function generatePlan() {
+    await generateClassroomPackage(form);
+  }
+
+  async function generateClassroomPackage(nextForm: FormState) {
     setLoading(true);
     setError("");
     setCopied(false);
@@ -303,7 +308,7 @@ export function InputForm() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify(nextForm)
       });
 
       const data = await response.json();
@@ -314,12 +319,26 @@ export function InputForm() {
 
       setPlan(data.plan);
       setPresentationIndex(0);
+      setResultViewMode("teacher");
       setSource(data.source || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function startDemoMode() {
+    const template = lessonTemplates[0];
+    const nextForm: FormState = {
+      grade: template.grade,
+      subject: template.subject,
+      topic: template.topic,
+      textbookVersion: template.version,
+      teachingStyle: template.recommendedStyle
+    };
+    setForm(nextForm);
+    await generateClassroomPackage(nextForm);
   }
 
   async function copyAll() {
@@ -458,6 +477,15 @@ export function InputForm() {
               </Button>
               <Button
                 type="button"
+                onClick={startDemoMode}
+                disabled={loading}
+                className="bg-slate-950 text-white hover:bg-slate-800"
+              >
+                <MonitorPlay className="h-4 w-4" />
+                一键进入 Demo
+              </Button>
+              <Button
+                type="button"
                 variant="secondary"
                 onClick={generatePlan}
                 disabled={loading || !plan}
@@ -571,6 +599,13 @@ export function InputForm() {
                 </p>
               </div>
             </div>
+          ) : null}
+
+          {plan.slides[presentationIndex] ? (
+            <TeachingConsole
+              plan={plan}
+              currentSlide={plan.slides[presentationIndex]}
+            />
           ) : null}
 
           {plan.lessonWorkflow && plan.afterClassSummary ? (
