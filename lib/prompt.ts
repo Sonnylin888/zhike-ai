@@ -6,6 +6,10 @@ export type TeachingPlan = {
   pptOutline: string[];
   interactionQuestions: string[];
   homework: string[];
+  lessonWorkflow?: LessonWorkflow;
+  afterClassSummary?: AfterClassSummary;
+  homeworkPlan?: HomeworkPlan;
+  teachingReflection?: TeachingReflection;
   lessonSummary?: {
     totalDuration: string;
     totalSlides: number;
@@ -14,6 +18,46 @@ export type TeachingPlan = {
     teachingStyle: string;
   };
   slides: Slide[];
+};
+
+export type LessonWorkflow = {
+  beforeClass: {
+    lessonGoal: string;
+    keyPoints: string[];
+    materials: string[];
+    teacherPreparation: string[];
+  };
+  inClass: {
+    teachingFlow: string[];
+    interactionMoments: string[];
+    pacePlan: string;
+  };
+  afterClass: {
+    summary: string;
+    homework: string[];
+    reflection: string;
+  };
+};
+
+export type AfterClassSummary = {
+  classSummary: string;
+  studentTakeaways: string[];
+  teacherReflection: string;
+  nextLessonSuggestion: string;
+};
+
+export type HomeworkPlan = {
+  basicHomework: string[];
+  advancedHomework: string[];
+  optionalTask: string;
+  estimatedTime: string;
+};
+
+export type TeachingReflection = {
+  possibleProblems: string[];
+  adjustmentSuggestions: string[];
+  studentMisconceptions: string[];
+  reteachSuggestion: string;
 };
 
 export type SpeakerScript = {
@@ -159,12 +203,52 @@ export function buildTeachingPrompt(
 13. speakerAssistant 要简洁，给老师快速扫读：talkScript 控制在 80 字内，keyPoints 2-3 条，studentQuestions 1-2 条，teacherAnswers 与问题一一对应。
 14. Slide 内容、互动问题、讲解提示都要体现“${teachingStyle}”风格。
 15. 根据学科只输出对应模块：地理输出 geoModule；数学输出 mathModule；历史输出 historyModule；英语输出 englishModule。不要四个模块一起输出。
-16. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
+16. 生成完整课堂包，顶层必须包含 lessonWorkflow、afterClassSummary、homeworkPlan、teachingReflection。
+17. lessonWorkflow 覆盖课前准备、课中教学、课后总结；内容要简洁实用。
+18. homeworkPlan 区分基础作业、提高作业和拓展任务，数量不要多。
+19. teachingReflection 只做教师复盘建议，不要假装有真实学生数据。
+20. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
 
 JSON 格式如下：
 {
   "lessonPlan": ["教案结构要点 1", "教案结构要点 2", "教案结构要点 3", "教案结构要点 4"],
   "pptOutline": ["PPT 大纲 1", "PPT 大纲 2", "PPT 大纲 3", "PPT 大纲 4"],
+  "lessonWorkflow": {
+    "beforeClass": {
+      "lessonGoal": "理解气候变化的表现、证据和影响。",
+      "keyPoints": ["气候变化证据", "温室效应增强", "低碳应对"],
+      "materials": ["气温变化曲线", "二氧化碳浓度资料", "案例图片"],
+      "teacherPreparation": ["准备导入问题", "确认读图材料", "预设学生易错点"]
+    },
+    "inClass": {
+      "teachingFlow": ["导入", "证据读图", "机制讲解", "互动总结"],
+      "interactionMoments": ["开场提问", "读图追问", "低碳行动讨论"],
+      "pacePlan": "控制在 35-40 分钟，读图和讨论留足时间。"
+    },
+    "afterClass": {
+      "summary": "学生能用证据说明气候变化并提出低碳行动。",
+      "homework": ["完成读图练习", "设计一条校园低碳建议"],
+      "reflection": "复盘学生是否能区分天气现象和气候趋势。"
+    }
+  },
+  "afterClassSummary": {
+    "classSummary": "本节课围绕证据、原因、影响和应对建立气候变化分析框架。",
+    "studentTakeaways": ["能读懂气温和二氧化碳变化趋势", "能解释温室效应增强"],
+    "teacherReflection": "下次可增加本地案例，让学生更容易建立现实联系。",
+    "nextLessonSuggestion": "下一节可衔接区域环境问题或低碳发展。"
+  },
+  "homeworkPlan": {
+    "basicHomework": ["整理本课概念框架", "完成一题读图题"],
+    "advancedHomework": ["分析一个地区受气候变化影响的案例"],
+    "optionalTask": "设计一张校园低碳行动海报。",
+    "estimatedTime": "20分钟"
+  },
+  "teachingReflection": {
+    "possibleProblems": ["学生可能把短期天气当作气候变化", "读图时忽略坐标单位"],
+    "adjustmentSuggestions": ["增加读图示范", "用追问帮助学生说出证据"],
+    "studentMisconceptions": ["一次高温就能证明全球变暖"],
+    "reteachSuggestion": "下次课前用 3 分钟复习天气与气候的区别。"
+  },
   "slides": [
     {
       "title": "气候变化是什么？",
@@ -318,9 +402,56 @@ function enhanceTeachingPlan(plan: DemoTeachingPlan): TeachingPlan {
     0
   );
 
+  const firstSlide = slides[0];
+  const keyPoints = slides.flatMap((slide) => slide.content).slice(0, 4);
+  const subjectModuleHint =
+    firstSlide?.mathModule?.formula ||
+    firstSlide?.historyModule?.causeEffect ||
+    firstSlide?.englishModule?.sentencePattern ||
+    firstSlide?.geoModule?.caseStudy ||
+    "本节课核心内容";
+
   return {
     ...plan,
     slides,
+    lessonWorkflow: plan.lessonWorkflow || {
+      beforeClass: {
+        lessonGoal: plan.lessonPlan[0] || "完成本节课核心目标。",
+        keyPoints: keyPoints.length ? keyPoints.slice(0, 3) : ["核心概念", "课堂互动", "总结迁移"],
+        materials: ["课堂导入素材", "投影演示页", "随堂互动问题"],
+        teacherPreparation: ["确认课堂节奏", "预设学生可能问题", "准备板书关键词"]
+      },
+      inClass: {
+        teachingFlow: ["导入", "新授", "互动", "总结"],
+        interactionMoments: slides
+          .map((slide) => slide.questionGuide.warmUpQuestion)
+          .slice(0, 3),
+        pacePlan: `围绕 ${slides.length} 页演示控制节奏，重点页留出互动时间。`
+      },
+      afterClass: {
+        summary: `本节课围绕“${subjectModuleHint}”完成讲解、互动和总结。`,
+        homework: plan.homework.slice(0, 2),
+        reflection: "课后复盘学生是否能说出关键依据，并记录需要补讲的概念。"
+      }
+    },
+    afterClassSummary: plan.afterClassSummary || {
+      classSummary: `本节课围绕“${subjectModuleHint}”组织课堂演示和互动。`,
+      studentTakeaways: keyPoints.length ? keyPoints.slice(0, 3) : ["掌握核心概念", "完成课堂表达"],
+      teacherReflection: "关注学生是否真正理解关键依据，而不是只记住结论。",
+      nextLessonSuggestion: "下一节课可从本节易错点切入，做一次短复习再进入新内容。"
+    },
+    homeworkPlan: plan.homeworkPlan || {
+      basicHomework: plan.homework.slice(0, 2),
+      advancedHomework: [plan.homework[2] || "完成一个本课主题的迁移练习。"],
+      optionalTask: "选择一个课堂问题，整理成 100 字学习札记。",
+      estimatedTime: "20分钟"
+    },
+    teachingReflection: plan.teachingReflection || {
+      possibleProblems: ["学生可能只记结论，忽略推理过程", "课堂互动时间可能被讲解挤压"],
+      adjustmentSuggestions: ["保留至少一次追问", "用板书固定核心路径"],
+      studentMisconceptions: slides[0]?.speakerScript.commonMistakes.slice(0, 2) || ["概念理解不完整"],
+      reteachSuggestion: "下节课开头用 3 分钟复盘本课关键问题和易错点。"
+    },
     lessonSummary: plan.lessonSummary || {
       totalDuration: `${totalMinutes || 40}分钟`,
       totalSlides: slides.length,

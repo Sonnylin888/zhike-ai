@@ -25,13 +25,17 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HomeworkPlanCard } from "@/components/HomeworkPlanCard";
 import { LessonTemplateGallery } from "@/components/LessonTemplateGallery";
+import { LessonWorkflowPanel } from "@/components/LessonWorkflowPanel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PaceControlCard } from "@/components/PaceControlCard";
 import { ResultCard } from "@/components/ResultCard";
 import { SpeakerScriptCard } from "@/components/SpeakerScriptCard";
 import { SubjectModuleCard } from "@/components/SubjectModuleCard";
+import { TeachingReflectionCard } from "@/components/TeachingReflectionCard";
+import { WorkflowNavigation } from "@/components/WorkflowNavigation";
 import {
   getSubjectStyleOptions,
   lessonTemplates,
@@ -56,10 +60,9 @@ const defaultForm: FormState = {
   teachingStyle: "启发式"
 };
 
-const moduleTitles: Record<
-  Exclude<keyof TeachingPlan, "slides" | "lessonSummary">,
-  string
-> = {
+type PlanListModule = "lessonPlan" | "pptOutline" | "interactionQuestions" | "homework";
+
+const moduleTitles: Record<PlanListModule, string> = {
   lessonPlan: "教案结构",
   pptOutline: "PPT 大纲",
   interactionQuestions: "课堂互动问题",
@@ -187,9 +190,7 @@ function getPaceSummary(plan: TeachingPlan) {
 function planToText(plan: TeachingPlan) {
   const modules = Object.entries(moduleTitles)
     .map(([key, title]) => {
-      const items = plan[
-        key as Exclude<keyof TeachingPlan, "slides" | "lessonSummary">
-      ];
+      const items = plan[key as PlanListModule];
       return `${title}\n${items.map((item, index) => `${index + 1}. ${item}`).join("\n")}`;
     })
     .join("\n\n");
@@ -201,7 +202,11 @@ function planToText(plan: TeachingPlan) {
     )
     .join("\n\n");
 
-  return `PPT 页面化结果\n${slides}\n\n${modules}`;
+  const workflow = plan.lessonWorkflow
+    ? `课堂工作流\n课前：${plan.lessonWorkflow.beforeClass.lessonGoal}\n课中：${plan.lessonWorkflow.inClass.pacePlan}\n课后：${plan.lessonWorkflow.afterClass.summary}`
+    : "";
+
+  return `PPT 页面化结果\n${slides}\n\n${workflow}\n\n${modules}`;
 }
 
 export function InputForm() {
@@ -449,7 +454,7 @@ export function InputForm() {
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                生成教学方案
+                一键生成课堂包
               </Button>
               <Button
                 type="button"
@@ -489,7 +494,7 @@ export function InputForm() {
             <div>
               <p className="font-semibold">AI 正在编排课堂演示页</p>
               <p className="text-sm text-cyan-100/75">
-                拆分 PPT 页面、生成教师提示与课堂提问...
+                整合课前准备、课中演示、教师讲稿与课后总结...
               </p>
             </div>
           </div>
@@ -566,6 +571,16 @@ export function InputForm() {
                 </p>
               </div>
             </div>
+          ) : null}
+
+          {plan.lessonWorkflow && plan.afterClassSummary ? (
+            <>
+              <WorkflowNavigation />
+              <LessonWorkflowPanel
+                workflow={plan.lessonWorkflow}
+                afterClassSummary={plan.afterClassSummary}
+              />
+            </>
           ) : null}
 
           <section className="space-y-4">
@@ -662,6 +677,17 @@ export function InputForm() {
             <ResultCard title="课堂互动问题" items={plan.interactionQuestions} />
             <ResultCard title="课后练习" items={plan.homework} />
           </div>
+
+          {(plan.homeworkPlan || plan.teachingReflection) ? (
+            <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              {plan.homeworkPlan ? (
+                <HomeworkPlanCard homeworkPlan={plan.homeworkPlan} />
+              ) : null}
+              {plan.teachingReflection ? (
+                <TeachingReflectionCard reflection={plan.teachingReflection} />
+              ) : null}
+            </section>
+          ) : null}
         </div>
       ) : null}
 

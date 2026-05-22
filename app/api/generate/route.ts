@@ -51,6 +51,21 @@ function normalizeTeachingPlan(
     pptOutline,
     interactionQuestions,
     homework,
+    lessonWorkflow: normalizeLessonWorkflow(
+      plan.lessonWorkflow,
+      lessonPlan,
+      homework,
+      normalizedSlides
+    ),
+    afterClassSummary: normalizeAfterClassSummary(
+      plan.afterClassSummary,
+      normalizedSlides
+    ),
+    homeworkPlan: normalizeHomeworkPlan(plan.homeworkPlan, homework),
+    teachingReflection: normalizeTeachingReflection(
+      plan.teachingReflection,
+      normalizedSlides
+    ),
     lessonSummary: normalizeLessonSummary(plan.lessonSummary, normalizedSlides, interactionQuestions),
     slides: normalizedSlides
   };
@@ -184,6 +199,139 @@ function normalizeSubjectModules(
 function parseMinutes(duration: string | undefined) {
   const match = duration?.match(/\d+/);
   return match ? Number(match[0]) : 4;
+}
+
+function normalizeLessonWorkflow(
+  workflow: Partial<NonNullable<TeachingPlan["lessonWorkflow"]>> | undefined,
+  lessonPlan: string[],
+  homework: string[],
+  slides: Slide[]
+): NonNullable<TeachingPlan["lessonWorkflow"]> {
+  const keyPoints = slides.flatMap((slide) => slide.content).slice(0, 3);
+
+  return {
+    beforeClass: {
+      lessonGoal:
+        workflow?.beforeClass?.lessonGoal?.trim() ||
+        lessonPlan[0] ||
+        "完成本节课核心目标，并准备课堂互动。",
+      keyPoints:
+        Array.isArray(workflow?.beforeClass?.keyPoints) &&
+        workflow.beforeClass.keyPoints.length > 0
+          ? workflow.beforeClass.keyPoints.filter(Boolean).slice(0, 4)
+          : keyPoints.length
+            ? keyPoints
+            : ["核心概念", "课堂互动", "总结迁移"],
+      materials:
+        Array.isArray(workflow?.beforeClass?.materials) &&
+        workflow.beforeClass.materials.length > 0
+          ? workflow.beforeClass.materials.filter(Boolean).slice(0, 4)
+          : ["投影演示页", "导入素材", "随堂问题"],
+      teacherPreparation:
+        Array.isArray(workflow?.beforeClass?.teacherPreparation) &&
+        workflow.beforeClass.teacherPreparation.length > 0
+          ? workflow.beforeClass.teacherPreparation.filter(Boolean).slice(0, 4)
+          : ["确认课堂节奏", "预设学生问题", "准备板书关键词"]
+    },
+    inClass: {
+      teachingFlow:
+        Array.isArray(workflow?.inClass?.teachingFlow) &&
+        workflow.inClass.teachingFlow.length > 0
+          ? workflow.inClass.teachingFlow.filter(Boolean).slice(0, 5)
+          : ["导入", "讲解", "互动", "总结"],
+      interactionMoments:
+        Array.isArray(workflow?.inClass?.interactionMoments) &&
+        workflow.inClass.interactionMoments.length > 0
+          ? workflow.inClass.interactionMoments.filter(Boolean).slice(0, 4)
+          : slides.map((slide) => slide.questionGuide.warmUpQuestion).slice(0, 3),
+      pacePlan:
+        workflow?.inClass?.pacePlan?.trim() ||
+        `围绕 ${slides.length} 页演示推进，重点页保留互动时间。`
+    },
+    afterClass: {
+      summary:
+        workflow?.afterClass?.summary?.trim() ||
+        "课后帮助学生回收核心概念、方法和课堂问题。",
+      homework:
+        Array.isArray(workflow?.afterClass?.homework) &&
+        workflow.afterClass.homework.length > 0
+          ? workflow.afterClass.homework.filter(Boolean).slice(0, 3)
+          : homework.slice(0, 2),
+      reflection:
+        workflow?.afterClass?.reflection?.trim() ||
+        "复盘学生是否能说出关键依据，并记录下次需要补讲的点。"
+    }
+  };
+}
+
+function normalizeAfterClassSummary(
+  summary: Partial<NonNullable<TeachingPlan["afterClassSummary"]>> | undefined,
+  slides: Slide[]
+): NonNullable<TeachingPlan["afterClassSummary"]> {
+  return {
+    classSummary:
+      summary?.classSummary?.trim() ||
+      `本节课围绕“${slides[0]?.title || "核心主题"}”完成讲解、互动和总结。`,
+    studentTakeaways:
+      Array.isArray(summary?.studentTakeaways) &&
+      summary.studentTakeaways.length > 0
+        ? summary.studentTakeaways.filter(Boolean).slice(0, 4)
+        : slides.flatMap((slide) => slide.content).slice(0, 3),
+    teacherReflection:
+      summary?.teacherReflection?.trim() ||
+      "关注学生是否真正理解关键依据，而不是只记住结论。",
+    nextLessonSuggestion:
+      summary?.nextLessonSuggestion?.trim() ||
+      "下一节课可从本节易错点切入，做一次短复习后进入新内容。"
+  };
+}
+
+function normalizeHomeworkPlan(
+  homeworkPlan: Partial<NonNullable<TeachingPlan["homeworkPlan"]>> | undefined,
+  homework: string[]
+): NonNullable<TeachingPlan["homeworkPlan"]> {
+  return {
+    basicHomework:
+      Array.isArray(homeworkPlan?.basicHomework) &&
+      homeworkPlan.basicHomework.length > 0
+        ? homeworkPlan.basicHomework.filter(Boolean).slice(0, 3)
+        : homework.slice(0, 2),
+    advancedHomework:
+      Array.isArray(homeworkPlan?.advancedHomework) &&
+      homeworkPlan.advancedHomework.length > 0
+        ? homeworkPlan.advancedHomework.filter(Boolean).slice(0, 2)
+        : [homework[2] || "完成一个本课主题的迁移练习。"],
+    optionalTask:
+      homeworkPlan?.optionalTask?.trim() ||
+      "选择一个课堂问题，整理成 100 字学习札记。",
+    estimatedTime: homeworkPlan?.estimatedTime?.trim() || "20分钟"
+  };
+}
+
+function normalizeTeachingReflection(
+  reflection: Partial<NonNullable<TeachingPlan["teachingReflection"]>> | undefined,
+  slides: Slide[]
+): NonNullable<TeachingPlan["teachingReflection"]> {
+  return {
+    possibleProblems:
+      Array.isArray(reflection?.possibleProblems) &&
+      reflection.possibleProblems.length > 0
+        ? reflection.possibleProblems.filter(Boolean).slice(0, 3)
+        : ["学生可能只记结论，忽略推理过程", "课堂互动时间可能被讲解挤压"],
+    adjustmentSuggestions:
+      Array.isArray(reflection?.adjustmentSuggestions) &&
+      reflection.adjustmentSuggestions.length > 0
+        ? reflection.adjustmentSuggestions.filter(Boolean).slice(0, 3)
+        : ["保留至少一次追问", "用板书固定核心路径"],
+    studentMisconceptions:
+      Array.isArray(reflection?.studentMisconceptions) &&
+      reflection.studentMisconceptions.length > 0
+        ? reflection.studentMisconceptions.filter(Boolean).slice(0, 3)
+        : slides[0]?.speakerScript.commonMistakes.slice(0, 2) || ["概念理解不完整"],
+    reteachSuggestion:
+      reflection?.reteachSuggestion?.trim() ||
+      "下节课开头用 3 分钟复盘本课关键问题和易错点。"
+  };
 }
 
 function normalizeLessonSummary(
