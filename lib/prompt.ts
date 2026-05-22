@@ -1,4 +1,5 @@
 import type { TeacherInput, TextbookContent } from "@/lib/textbook";
+import { getSubjectPromptStrategy } from "@/lib/subjectPrompts";
 
 export type TeachingPlan = {
   lessonPlan: string[];
@@ -38,6 +39,32 @@ export type QuestionGuide = {
   expectedAnswer: string;
 };
 
+export type GeoModule = {
+  mapFocus: string;
+  caseStudy: string;
+  realWorldConnection: string;
+};
+
+export type MathModule = {
+  formula: string;
+  steps: string[];
+  exampleProblem: string;
+  solutionHint: string;
+};
+
+export type HistoryModule = {
+  timeline: string[];
+  keyFigures: string[];
+  causeEffect: string;
+};
+
+export type EnglishModule = {
+  vocabulary: string[];
+  sentencePattern: string;
+  speakingTask: string;
+  dialogue: string[];
+};
+
 export type Slide = {
   title: string;
   content: string[];
@@ -53,6 +80,10 @@ export type Slide = {
   speakerScript: SpeakerScript;
   paceControl: PaceControl;
   questionGuide: QuestionGuide;
+  geoModule?: GeoModule;
+  mathModule?: MathModule;
+  historyModule?: HistoryModule;
+  englishModule?: EnglishModule;
   speakerAssistant: {
     talkScript: string;
     keyPoints: string[];
@@ -72,12 +103,23 @@ export function buildTeachingPrompt(
   textbook: TextbookContent
 ) {
   const teachingStyle = input.teachingStyle || "启发式";
-  const styleInstruction: Record<NonNullable<TeacherInput["teachingStyle"]>, string> = {
+  const styleInstruction: Record<string, string> = {
     启发式: "更多问题链、追问和观察-归纳路径，少直接给结论。",
     应试型: "突出考点、易错点、规范表达和随堂练习，帮助学生迁移到试题。",
     互动型: "增加讨论、小测验、举手互动和学生表达机会，课堂节奏更开放。",
-    公开课型: "强化导入、板书感、课堂节奏、展示语言和可观摩的活动设计。"
+    公开课型: "强化导入、板书感、课堂节奏、展示语言和可观摩的活动设计。",
+    案例型: "用案例驱动概念理解，强调真实区域和现实问题。",
+    探究型: "通过问题链、材料观察和学生推理推进课堂。",
+    图像分析型: "强调读图、析图、地图证据和空间表达。",
+    推导型: "突出概念到公式的推导过程和板书步骤。",
+    练习型: "用例题、变式和即时练习巩固方法。",
+    故事型: "用历史情境和人物故事带出事件逻辑。",
+    讨论型: "用观点辨析和材料讨论推动历史解释。",
+    线索型: "围绕时间线、因果线和影响线组织课堂。",
+    口语型: "强调跟读、替换操练、对话表达和真实交流。",
+    考试型: "强调语法规则、易错点和题型迁移。"
   };
+  const subjectStrategy = getSubjectPromptStrategy(input.subject);
 
   return `
 你是一名有 15 年一线经验的高中地理教师，熟悉人教版高中地理教材与公开课展示。
@@ -89,7 +131,8 @@ export function buildTeachingPrompt(
 - 学科：${input.subject}
 - 课题：${input.topic}
 - 教材版本：${input.textbookVersion}
-- 教学风格：${teachingStyle}（${styleInstruction[teachingStyle]}）
+- 教学风格：${teachingStyle}（${styleInstruction[teachingStyle] || "根据学科特点组织课堂活动。"}）
+- 学科生成策略：${subjectStrategy}
 
 教材内容：
 - 章节：${textbook.chapter}
@@ -115,7 +158,8 @@ export function buildTeachingPrompt(
 12. questionGuide 要有导入问题、深度问题、追问和参考回答，问题要有层次。
 13. speakerAssistant 要简洁，给老师快速扫读：talkScript 控制在 80 字内，keyPoints 2-3 条，studentQuestions 1-2 条，teacherAnswers 与问题一一对应。
 14. Slide 内容、互动问题、讲解提示都要体现“${teachingStyle}”风格。
-15. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
+15. 根据学科只输出对应模块：地理输出 geoModule；数学输出 mathModule；历史输出 historyModule；英语输出 englishModule。不要四个模块一起输出。
+16. 严格输出 JSON，不要 Markdown，不要代码块，不要额外解释。
 
 JSON 格式如下：
 {
@@ -154,6 +198,11 @@ JSON 格式如下：
         "followUpQuestion": "一次高温能不能证明全球变暖？为什么？",
         "expectedAnswer": "不能。需要长期、多地区、连续观测的数据趋势。"
       },
+      "geoModule": {
+        "mapFocus": "全球不同纬度地区的增温差异",
+        "caseStudy": "冰川退缩与海平面上升",
+        "realWorldConnection": "联系城市高温、农业生产和校园低碳行动"
+      },
       "speakerAssistant": {
         "talkScript": "先用生活现象导入，再把学生观察收束到气候变化的核心问题。",
         "keyPoints": ["区分天气与气候", "建立证据意识"],
@@ -179,7 +228,17 @@ type DemoSlide = Omit<
   "boardWriting" | "speakerScript" | "paceControl" | "questionGuide"
 > &
   Partial<
-    Pick<Slide, "boardWriting" | "speakerScript" | "paceControl" | "questionGuide">
+    Pick<
+      Slide,
+      | "boardWriting"
+      | "speakerScript"
+      | "paceControl"
+      | "questionGuide"
+      | "geoModule"
+      | "mathModule"
+      | "historyModule"
+      | "englishModule"
+    >
   >;
 
 type DemoTeachingPlan = Omit<TeachingPlan, "slides"> & {
@@ -297,6 +356,11 @@ export const demoTeachingPlan: TeachingPlan = enhanceTeachingPlan({
       paceTip: "开场先停顿 10 秒，让学生说出身边现象。",
       teacherTip: "先让学生举例，再把生活经验收束到本课核心问题。",
       discussionPrompt: "请同桌互相补充一个近年极端天气案例，并判断它能否作为气候变化证据。",
+      geoModule: {
+        mapFocus: "全球不同纬度地区的增温差异",
+        caseStudy: "近年极端高温与城市热岛现象",
+        realWorldConnection: "联系校园高温体验和低碳行动"
+      },
       speakerAssistant: {
         talkScript: "从学生熟悉的高温、暴雨导入，提醒他们把感受转化为可验证的问题。",
         keyPoints: ["生活现象导入", "天气与气候区分", "提出核心问题"],
@@ -321,6 +385,11 @@ export const demoTeachingPlan: TeachingPlan = enhanceTeachingPlan({
       paceTip: "先读图再解释，至少安排一次追问。",
       teacherTip: "建议切换到读图节奏，追问“先描述，再解释”。",
       discussionPrompt: "小组讨论：如果两条曲线同步上升，能否直接说明因果关系？还需要哪些证据？",
+      geoModule: {
+        mapFocus: "全球气温观测站与冰川分布区域",
+        caseStudy: "冰川退缩作为气候变化旁证",
+        realWorldConnection: "联系海平面上升对沿海城市的影响"
+      },
       speakerAssistant: {
         talkScript: "带学生按标题、坐标、趋势、异常点读图，再讨论二氧化碳与气温的关系。",
         keyPoints: ["读图顺序", "长期趋势", "相关不等于因果"],
@@ -345,6 +414,11 @@ export const demoTeachingPlan: TeachingPlan = enhanceTeachingPlan({
       paceTip: "讲完机制后停顿，让学生复述能量链条。",
       teacherTip: "此页适合板书“短波进入、长波受阻”的机制链条。",
       discussionPrompt: "请用一句话向同学解释“温室效应增强”的能量传递过程。",
+      geoModule: {
+        mapFocus: "能源消费高强度地区与排放分布",
+        caseStudy: "工业生产和交通排放",
+        realWorldConnection: "联系日常能源消费与碳排放"
+      },
       speakerAssistant: {
         talkScript: "用能量收支讲清温室效应增强：短波进入地表，长波被温室气体更多吸收。",
         keyPoints: ["短波辐射", "长波辐射", "人类活动增强排放"],
@@ -369,6 +443,11 @@ export const demoTeachingPlan: TeachingPlan = enhanceTeachingPlan({
       paceTip: "收束前安排快答，把宏观概念落到校园行动。",
       teacherTip: "建议收束为小组快答，用一个校园行动对应一个地理依据。",
       discussionPrompt: "快速讨论：选择一项校园低碳行动，说出它对应的减排或适应逻辑。",
+      geoModule: {
+        mapFocus: "城市热岛与绿色空间分布",
+        caseStudy: "低碳城市与绿色校园",
+        realWorldConnection: "设计一项学校低碳行动"
+      },
       speakerAssistant: {
         talkScript: "把影响与应对落到学校场景，让学生用地理依据说明一个可执行行动。",
         keyPoints: ["区域影响差异", "减缓与适应", "低碳行动"],
@@ -424,6 +503,11 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "材料读完后停顿，让学生先判断原因层次。",
           teacherTip: "强调直接原因与根本原因的区别。",
           discussionPrompt: "同桌讨论：贸易冲突、禁烟运动、工业扩张哪个更接近根本原因？",
+          historyModule: {
+            timeline: ["19世纪上半期：鸦片输入增加", "1839年：虎门销烟", "1840年：战争爆发"],
+            keyFigures: ["林则徐", "道光帝", "英国侵略者"],
+            causeEffect: "工业扩张和贸易利益推动英国以禁烟为借口发动侵略战争。"
+          },
           speakerAssistant: {
             talkScript: "从材料入手，引导学生区分直接原因和根本原因，不把战争简单理解为禁烟冲突。",
             keyPoints: ["贸易失衡", "鸦片危害", "根本原因"],
@@ -448,6 +532,11 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "讲条款时每讲一条追问一次“损害了什么权利”。",
           teacherTip: "适合板书“条款-影响-主权受损”。",
           discussionPrompt: "小组讨论：哪一条对中国社会影响最深？说明依据。",
+          historyModule: {
+            timeline: ["1842年：《南京条约》签订", "五口通商", "协定关税"],
+            keyFigures: ["清政府代表", "英国代表"],
+            causeEffect: "战败导致不平等条约签订，中国主权和贸易权受到破坏。"
+          },
           speakerAssistant: {
             talkScript: "不要只背条款，要把条款翻译成国家权利的变化，让学生理解半殖民地化的开端。",
             keyPoints: ["领土主权", "贸易特权", "关税自主"],
@@ -472,6 +561,11 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "结尾留 1 分钟让学生用一句话概括历史意义。",
           teacherTip: "公开课场景可用时间轴收束。",
           discussionPrompt: "请用“从……到……”句式概括鸦片战争后的变化。",
+          historyModule: {
+            timeline: ["战前：传统农业社会", "战后：被迫卷入世界市场", "近代：民族危机加深"],
+            keyFigures: ["林则徐", "魏源"],
+            causeEffect: "外部侵略与内部危机叠加，中国历史任务开始转向救亡图存。"
+          },
           speakerAssistant: {
             talkScript: "用时间轴收束：战争后中国社会性质、外部关系和历史任务都发生改变。",
             keyPoints: ["社会性质变化", "民族危机", "近代史开端"],
@@ -525,6 +619,12 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "先让学生用手势表示分数大小。",
           teacherTip: "强调分数单位，不急着给公式。",
           discussionPrompt: "同桌互说：1/4 和 2/4 的分数单位一样吗？",
+          mathModule: {
+            formula: "a/n + b/n = (a+b)/n",
+            steps: ["确认分母相同", "理解分数单位相同", "只把分子表示的份数相加"],
+            exampleProblem: "1/4 + 2/4 = ?",
+            solutionHint: "都是以 1/4 为单位，1 份加 2 份等于 3 份。"
+          },
           speakerAssistant: {
             talkScript: "先讲清分数单位，学生理解同分母其实是在数同一种小份。",
             keyPoints: ["整体", "平均分", "分数单位"],
@@ -549,6 +649,12 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "讲完规则后立刻做 2 道口算。",
           teacherTip: "应试型可补充约分和易错点。",
           discussionPrompt: "找错：2/5 + 1/5 = 3/10 错在哪里？",
+          mathModule: {
+            formula: "a/n - b/n = (a-b)/n",
+            steps: ["看分母", "分母不变", "分子相加减", "能约分时再约分"],
+            exampleProblem: "2/7 + 3/7 = ?",
+            solutionHint: "分母表示分数单位，单位不变，份数相加。"
+          },
           speakerAssistant: {
             talkScript: "把同分母看作相同单位的计数，重点纠正分母相加的常见错误。",
             keyPoints: ["同单位计数", "分母不变", "易错辨析"],
@@ -573,6 +679,12 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
           paceTip: "让学生用图形说明，而不是只说公式。",
           teacherTip: "互动型可安排学生上台摆图形。",
           discussionPrompt: "用画图解释：1/2 + 1/4 应该先把 1/2 看成几个 1/4？",
+          mathModule: {
+            formula: "异分母加减：先统一分数单位",
+            steps: ["观察分数单位", "借助图形转化", "统一单位后再加减"],
+            exampleProblem: "1/2 + 1/4 = ?",
+            solutionHint: "先把 1/2 看成 2/4，再和 1/4 相加。"
+          },
           speakerAssistant: {
             talkScript: "用图形把不同分数单位转化为相同单位，让学生为通分建立直觉。",
             keyPoints: ["单位不同", "图形转化", "通分直觉"],
@@ -596,6 +708,130 @@ export function getDemoTeachingPlan(input: TeacherInput): TeachingPlan {
         "完成 8 道同分母分数加减口算。",
         "写出一道易错题，并说明错误原因。",
         "用图形解释 1/2 + 1/4。"
+      ]
+    });
+  }
+
+  if (normalized.includes("英语") || normalized.includes("过去时")) {
+    return enhanceTeachingPlan({
+      lessonPlan: [
+        "导入：用 yesterday / last weekend 等时间状语唤起学生生活表达。",
+        "新授：通过例句归纳一般过去时结构和动词过去式变化。",
+        "操练：跟读、替换句型和两人对话，完成过去经历表达。",
+        "输出：用 3 句话描述自己的上周末。"
+      ],
+      pptOutline: [
+        "第 1 页：Warm-up：What did you do yesterday?",
+        "第 2 页：Grammar：一般过去时结构。",
+        "第 3 页：Practice：动词过去式与句型替换。",
+        "第 4 页：Speaking：Weekend dialogue."
+      ],
+      slides: [
+        {
+          title: "What did you do yesterday?",
+          content: ["用 yesterday 引出过去时间", "用 did 提问过去行为", "学生用短句回答"],
+          teacherNote: "先让学生跟读问题，再用手势提示过去时间。",
+          question: "What did you do yesterday?",
+          imagePrompt: "English classroom yesterday speaking practice students projection",
+          duration: "4分钟",
+          interactionCount: 2,
+          paceTip: "先跟读，再点名两位学生用短句回答。",
+          teacherTip: "口语型课堂要先开口，不急着讲规则。",
+          discussionPrompt: "Pair work: ask and answer with your partner.",
+          englishModule: {
+            vocabulary: ["yesterday", "played", "visited", "watched"],
+            sentencePattern: "What did you do yesterday? I watched TV.",
+            speakingTask: "Ask your partner one past activity question.",
+            dialogue: ["A: What did you do yesterday?", "B: I watched TV."]
+          },
+          speakerAssistant: {
+            talkScript: "先把学生带入口语情境，用 yesterday 让他们感知过去时间，再自然引出 did。",
+            keyPoints: ["past time", "did question", "short answer"],
+            studentQuestions: ["为什么这里用 did？"],
+            teacherAnswers: ["did 帮助我们提问过去发生的动作。"]
+          },
+          quiz: {
+            type: "raiseHand",
+            question: "Which word shows past time?",
+            options: ["yesterday", "now", "tomorrow"],
+            answer: "yesterday"
+          }
+        },
+        {
+          title: "Past Simple Structure",
+          content: ["主语 + 动词过去式", "一般疑问句用 Did", "否定句用 didn't"],
+          teacherNote: "用三组例句归纳结构，不要先背长规则。",
+          question: "How do we ask a past question?",
+          imagePrompt: "English grammar past simple sentence pattern classroom",
+          duration: "6分钟",
+          interactionCount: 1,
+          paceTip: "讲完结构立刻做句型替换。",
+          teacherTip: "板书肯定句、疑问句、否定句三行结构。",
+          discussionPrompt: "Change: I play football. -> I played football yesterday.",
+          englishModule: {
+            vocabulary: ["played", "cleaned", "visited", "didn't"],
+            sentencePattern: "Did you + verb...? Yes, I did. / No, I didn't.",
+            speakingTask: "Make two Did you questions.",
+            dialogue: ["A: Did you play football?", "B: Yes, I did."]
+          },
+          speakerAssistant: {
+            talkScript: "用例句让学生发现结构：陈述句看动词过去式，提问时 did 放到前面。",
+            keyPoints: ["verb-ed", "Did questions", "didn't"],
+            studentQuestions: ["用了 did 后动词还要加 ed 吗？"],
+            teacherAnswers: ["不用。Did 后面用动词原形。"]
+          },
+          quiz: {
+            type: "single",
+            question: "Choose the right sentence.",
+            options: ["Did you played?", "Did you play?", "Do you played?"],
+            answer: "Did you play?"
+          }
+        },
+        {
+          title: "Weekend Dialogue",
+          content: ["用过去时间状语", "完成两轮问答", "用 one more question 追问细节"],
+          teacherNote: "让学生两人一组完成对话，教师只给关键词提示。",
+          question: "Can you ask one more question?",
+          imagePrompt: "English speaking dialogue pair work classroom",
+          duration: "6分钟",
+          interactionCount: 2,
+          paceTip: "给学生 2 分钟对话时间，再邀请一组展示。",
+          teacherTip: "互动型课堂要留出真实开口时间。",
+          discussionPrompt: "Pair work: talk about your last weekend.",
+          englishModule: {
+            vocabulary: ["last weekend", "went", "saw", "had"],
+            sentencePattern: "What did you do last weekend? I went to...",
+            speakingTask: "Make a 4-line weekend dialogue.",
+            dialogue: [
+              "A: What did you do last weekend?",
+              "B: I went to the park.",
+              "A: Did you have fun?",
+              "B: Yes, I did."
+            ]
+          },
+          speakerAssistant: {
+            talkScript: "把语法落到真实对话里，让学生用过去时讲自己的周末经历。",
+            keyPoints: ["time phrase", "pair work", "follow-up question"],
+            studentQuestions: ["不会说某个动词过去式怎么办？"],
+            teacherAnswers: ["先用已学动词表达，也可以查词表后再替换。"]
+          },
+          quiz: {
+            type: "trueFalse",
+            question: "After did, we use the base form of the verb.",
+            options: ["True", "False"],
+            answer: "True"
+          }
+        }
+      ],
+      interactionQuestions: [
+        "What did you do yesterday?",
+        "How do we make a Did you question?",
+        "Can you ask one follow-up question?"
+      ],
+      homework: [
+        "Write five past simple sentences.",
+        "Make a short weekend dialogue.",
+        "Circle the past time words in the sentences."
       ]
     });
   }

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BookOpen,
   ChevronLeft,
   ChevronRight,
   Clipboard,
@@ -26,11 +25,19 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LessonTemplateGallery } from "@/components/LessonTemplateGallery";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PaceControlCard } from "@/components/PaceControlCard";
 import { ResultCard } from "@/components/ResultCard";
 import { SpeakerScriptCard } from "@/components/SpeakerScriptCard";
+import { SubjectModuleCard } from "@/components/SubjectModuleCard";
+import {
+  getSubjectStyleOptions,
+  lessonTemplates,
+  type LessonTemplate,
+  type TeachingStyle
+} from "@/lib/lessonTemplates";
 import type { Slide, TeachingPlan } from "@/lib/prompt";
 
 type FormState = {
@@ -38,7 +45,7 @@ type FormState = {
   subject: string;
   topic: string;
   textbookVersion: string;
-  teachingStyle: "启发式" | "应试型" | "互动型" | "公开课型";
+  teachingStyle: TeachingStyle;
 };
 
 const defaultForm: FormState = {
@@ -62,46 +69,6 @@ const moduleTitles: Record<
 type AnimationMode = "fade" | "slide" | "zoom";
 type PresentationAudience = "student" | "teacher";
 type ResultViewMode = "teacher" | "student";
-
-const teachingStyles: Array<{
-  value: FormState["teachingStyle"];
-  hint: string;
-}> = [
-  { value: "启发式", hint: "问题链" },
-  { value: "应试型", hint: "考点/易错" },
-  { value: "互动型", hint: "讨论/小测" },
-  { value: "公开课型", hint: "节奏/展示" }
-];
-
-const demoTemplates: Array<FormState & { label: string; description: string }> = [
-  {
-    label: "高中地理｜气候变化",
-    description: "证据、机制、影响与低碳行动",
-    grade: "高中",
-    subject: "地理",
-    topic: "气候变化",
-    textbookVersion: "人教版",
-    teachingStyle: "启发式"
-  },
-  {
-    label: "初中历史｜鸦片战争",
-    description: "原因、条约与近代史开端",
-    grade: "初中",
-    subject: "历史",
-    topic: "鸦片战争",
-    textbookVersion: "人教版",
-    teachingStyle: "公开课型"
-  },
-  {
-    label: "小学数学｜分数加减法",
-    description: "分数单位、算法与易错辨析",
-    grade: "小学",
-    subject: "数学",
-    topic: "分数加减法",
-    textbookVersion: "人教版",
-    teachingStyle: "互动型"
-  }
-];
 
 const animationLabels: Record<AnimationMode, string> = {
   fade: "Fade",
@@ -133,6 +100,24 @@ const slideVisuals = [
     url: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1400&q=80",
     accent: "from-indigo-300/55 via-slate-950/20 to-lime-200/45",
     label: "Low-carbon future"
+  },
+  {
+    keywords: ["history", "war", "treaty", "timeline", "鸦片", "战争", "条约", "历史"],
+    url: "https://images.unsplash.com/photo-1461360370896-922624d12aa1?auto=format&fit=crop&w=1400&q=80",
+    accent: "from-amber-300/55 via-slate-950/20 to-cyan-200/35",
+    label: "History timeline"
+  },
+  {
+    keywords: ["math", "fraction", "formula", "diagram", "数学", "分数", "公式", "例题"],
+    url: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=1400&q=80",
+    accent: "from-violet-300/55 via-slate-950/20 to-cyan-200/40",
+    label: "Math reasoning"
+  },
+  {
+    keywords: ["english", "grammar", "dialogue", "speaking", "英语", "过去时", "句型", "口语"],
+    url: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1400&q=80",
+    accent: "from-rose-300/50 via-slate-950/20 to-sky-200/40",
+    label: "English speaking"
   }
 ];
 
@@ -239,6 +224,31 @@ export function InputForm() {
     () => (plan ? getPaceSummary(plan) : null),
     [plan]
   );
+  const activeTemplateId = useMemo(() => {
+    return lessonTemplates.find(
+      (template) =>
+        template.grade === form.grade &&
+        template.subject === form.subject &&
+        template.topic === form.topic &&
+        template.version === form.textbookVersion
+    )?.id;
+  }, [form.grade, form.subject, form.topic, form.textbookVersion]);
+  const styleOptions = useMemo(
+    () => getSubjectStyleOptions(form.subject),
+    [form.subject]
+  );
+
+  function applyTemplate(template: LessonTemplate) {
+    setForm({
+      grade: template.grade,
+      subject: template.subject,
+      topic: template.topic,
+      textbookVersion: template.version,
+      teachingStyle: template.recommendedStyle
+    });
+    setPlan(null);
+    setPresentationIndex(0);
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -339,33 +349,14 @@ export function InputForm() {
 
   return (
     <div className="space-y-6">
+      <LessonTemplateGallery
+        activeId={activeTemplateId}
+        templates={lessonTemplates}
+        onSelect={applyTemplate}
+      />
+
       <Card className="overflow-hidden border-cyan-900/10 bg-white/92 shadow-glow backdrop-blur">
         <CardContent className="p-5 md:p-6">
-          <div className="mb-5 grid gap-3 md:grid-cols-3">
-            {demoTemplates.map((template) => (
-              <button
-                key={template.label}
-                type="button"
-                onClick={() => setForm(template)}
-                className={`rounded-lg border p-4 text-left transition ${
-                  form.grade === template.grade &&
-                  form.subject === template.subject &&
-                  form.topic === template.topic
-                    ? "border-cyan-400 bg-cyan-50 shadow-[0_12px_28px_rgba(8,145,178,0.12)]"
-                    : "border-slate-200 bg-white hover:border-cyan-200 hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-                  <BookOpen className="h-4 w-4 text-cyan-600" />
-                  {template.label}
-                </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  {template.description}
-                </p>
-              </button>
-            ))}
-          </div>
-
           <div className="grid gap-4 md:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="grade">学段/年级</Label>
@@ -417,25 +408,25 @@ export function InputForm() {
             <div className="space-y-2">
               <Label>教学风格</Label>
               <div className="grid grid-cols-2 gap-2">
-                {teachingStyles.map((style) => (
+                {styleOptions.map((style) => (
                   <button
-                    key={style.value}
+                    key={style}
                     type="button"
                     onClick={() =>
                       setForm((current) => ({
                         ...current,
-                        teachingStyle: style.value
+                        teachingStyle: style
                       }))
                     }
                     className={`rounded-md border px-2.5 py-2 text-left transition ${
-                      form.teachingStyle === style.value
+                      form.teachingStyle === style
                         ? "border-slate-950 bg-slate-950 text-white"
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <span className="block text-xs font-semibold">{style.value}</span>
+                    <span className="block text-xs font-semibold">{style}</span>
                     <span className="mt-0.5 block text-[11px] opacity-70">
-                      {style.hint}
+                      学科推荐
                     </span>
                   </button>
                 ))}
@@ -656,7 +647,10 @@ export function InputForm() {
             </div>
             {resultViewMode === "teacher" && plan.slides[presentationIndex] ? (
               <div className="grid gap-4 xl:grid-cols-[1fr_0.72fr]">
-                <SpeakerScriptCard slide={plan.slides[presentationIndex]} />
+                <div className="space-y-4">
+                  <SpeakerScriptCard slide={plan.slides[presentationIndex]} />
+                  <SubjectModuleCard slide={plan.slides[presentationIndex]} />
+                </div>
                 <PaceControlCard slide={plan.slides[presentationIndex]} />
               </div>
             ) : null}

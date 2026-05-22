@@ -19,16 +19,19 @@ function isValidInput(input: Partial<TeacherInput>) {
   );
 }
 
-function parseTeachingPlan(content: string): TeachingPlan {
+function parseTeachingPlan(content: string, input: TeacherInput): TeachingPlan {
   const cleaned = content
     .replace(/^```json/i, "")
     .replace(/^```/, "")
     .replace(/```$/, "")
     .trim();
-  return normalizeTeachingPlan(JSON.parse(cleaned) as Partial<TeachingPlan>);
+  return normalizeTeachingPlan(JSON.parse(cleaned) as Partial<TeachingPlan>, input);
 }
 
-function normalizeTeachingPlan(plan: Partial<TeachingPlan>): TeachingPlan {
+function normalizeTeachingPlan(
+  plan: Partial<TeachingPlan>,
+  input?: TeacherInput
+): TeachingPlan {
   const lessonPlan = Array.isArray(plan.lessonPlan) ? plan.lessonPlan : [];
   const pptOutline = Array.isArray(plan.pptOutline) ? plan.pptOutline : [];
   const interactionQuestions = Array.isArray(plan.interactionQuestions)
@@ -39,7 +42,8 @@ function normalizeTeachingPlan(plan: Partial<TeachingPlan>): TeachingPlan {
   const normalizedSlides = normalizeSlides(
     plan.slides,
     pptOutline,
-    interactionQuestions
+    interactionQuestions,
+    input?.subject
   );
 
   return {
@@ -55,7 +59,8 @@ function normalizeTeachingPlan(plan: Partial<TeachingPlan>): TeachingPlan {
 function normalizeSlides(
   slides: TeachingPlan["slides"] | undefined,
   pptOutline: string[],
-  interactionQuestions: string[]
+  interactionQuestions: string[],
+  subject = ""
 ): Slide[] {
   if (Array.isArray(slides) && slides.length > 0) {
     return slides.slice(0, 8).map((slide, index) => ({
@@ -92,6 +97,7 @@ function normalizeSlides(
       speakerScript: normalizeSpeakerScript(slide, index),
       paceControl: normalizePaceControl(slide, index),
       questionGuide: normalizeQuestionGuide(slide, index),
+      ...normalizeSubjectModules(slide, `${subject} ${slide.title || ""}`, index),
       speakerAssistant: normalizeSpeakerAssistant(slide, index),
       quiz: normalizeQuiz(slide.quiz, slide.question, index)
     }));
@@ -124,10 +130,55 @@ function normalizeSlides(
       speakerScript: normalizeSpeakerScript(undefined, index, title || detail),
       paceControl: normalizePaceControl(undefined, index),
       questionGuide: normalizeQuestionGuide(undefined, index, title || detail),
+      ...normalizeSubjectModules(undefined, `${subject} ${title || detail}`, index),
       speakerAssistant: normalizeSpeakerAssistant(undefined, index, title || detail),
       quiz: normalizeQuiz(undefined, interactionQuestions[index], index)
     };
   });
+}
+
+function normalizeSubjectModules(
+  slide: Partial<Slide> | undefined,
+  title: string,
+  index: number
+): Pick<Slide, "geoModule" | "mathModule" | "historyModule" | "englishModule"> {
+  const text = `${title} ${slide?.title || ""} ${slide?.imagePrompt || ""}`;
+  if (slide?.mathModule || /数学|分数|公式|fraction/i.test(text)) {
+    return {
+      mathModule: slide?.mathModule || {
+        formula: "核心公式 / 方法",
+        steps: ["读题", "列式", "计算", "检查"],
+        exampleProblem: slide?.question || "根据本页内容完成一个例题。",
+        solutionHint: "先说清每一步为什么这样做。"
+      }
+    };
+  }
+  if (slide?.historyModule || /历史|战争|条约|timeline|war/i.test(text)) {
+    return {
+      historyModule: slide?.historyModule || {
+        timeline: [`节点 ${index + 1}`, "背景", "影响"],
+        keyFigures: ["关键人物"],
+        causeEffect: slide?.discussionPrompt || "从背景、经过和影响说明事件因果。"
+      }
+    };
+  }
+  if (slide?.englishModule || /英语|english|grammar|dialogue|past/i.test(text)) {
+    return {
+      englishModule: slide?.englishModule || {
+        vocabulary: ["key word", "practice"],
+        sentencePattern: slide?.question || "Core sentence pattern",
+        speakingTask: "Pair work: ask and answer.",
+        dialogue: ["A: Ask a question.", "B: Give an answer."]
+      }
+    };
+  }
+  return {
+    geoModule: slide?.geoModule || {
+      mapFocus: "本页关注区域与空间差异",
+      caseStudy: title || "课堂案例",
+      realWorldConnection: slide?.discussionPrompt || "联系现实生活中的地理问题。"
+    }
+  };
 }
 
 function parseMinutes(duration: string | undefined) {
@@ -400,7 +451,7 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({
-        plan: parseTeachingPlan(content),
+        plan: parseTeachingPlan(content, input),
         source: "ai",
         textbook
       });
