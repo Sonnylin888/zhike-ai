@@ -25,6 +25,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DemoHealthCheck } from "@/components/DemoHealthCheck";
 import { HomeworkPlanCard } from "@/components/HomeworkPlanCard";
 import { LessonTemplateGallery } from "@/components/LessonTemplateGallery";
 import { LessonWorkflowPanel } from "@/components/LessonWorkflowPanel";
@@ -37,6 +38,8 @@ import { SubjectModuleCard } from "@/components/SubjectModuleCard";
 import { TeachingReflectionCard } from "@/components/TeachingReflectionCard";
 import { TeachingConsole } from "@/components/TeachingConsole";
 import { WorkflowNavigation } from "@/components/WorkflowNavigation";
+import { TrialFeedback } from "@/components/TrialFeedback";
+import { TrialSummaryPage } from "@/components/TrialSummaryPage";
 import {
   getSubjectStyleOptions,
   lessonTemplates,
@@ -236,9 +239,16 @@ export function InputForm() {
         template.grade === form.grade &&
         template.subject === form.subject &&
         template.topic === form.topic &&
-        template.version === form.textbookVersion
+      template.version === form.textbookVersion
     )?.id;
   }, [form.grade, form.subject, form.topic, form.textbookVersion]);
+  const activeTemplate = useMemo(
+    () => lessonTemplates.find((template) => template.id === activeTemplateId),
+    [activeTemplateId]
+  );
+  const activeTemplateLabel = activeTemplate
+    ? `${activeTemplate.grade}${activeTemplate.subject}｜${activeTemplate.topic}`
+    : `${form.grade}${form.subject}｜${form.topic}`;
   const styleOptions = useMemo(
     () => getSubjectStyleOptions(form.subject),
     [form.subject]
@@ -552,6 +562,12 @@ export function InputForm() {
             </div>
           ) : null}
 
+          <DemoHealthCheck
+            plan={plan}
+            source={source}
+            activeTemplateLabel={activeTemplateLabel}
+          />
+
           {paceSummary ? (
             <div className="grid gap-3 md:grid-cols-4">
               <div className="rounded-lg border border-cyan-900/10 bg-slate-950 p-4 text-white">
@@ -723,6 +739,9 @@ export function InputForm() {
               ) : null}
             </section>
           ) : null}
+
+          <TrialSummaryPage plan={plan} />
+          <TrialFeedback />
         </div>
       ) : null}
 

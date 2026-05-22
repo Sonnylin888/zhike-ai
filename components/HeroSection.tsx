@@ -1,4 +1,4 @@
-import { ArrowDown, MonitorPlay, Sparkles } from "lucide-react";
+import { ArrowDown, MonitorPlay, School, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function HeroSection() {
@@ -19,7 +19,7 @@ export function HeroSection() {
               ZK
             </div>
             <div>
-              <p className="text-base font-semibold">zhike-ai v1.0</p>
+              <p className="text-base font-semibold">zhike-ai v1.1</p>
               <p className="text-xs text-cyan-100/70">AI Teaching Console</p>
             </div>
           </div>
@@ -53,6 +53,12 @@ export function HeroSection() {
               <a href="#demo-gallery">
                 <ArrowDown className="h-4 w-4" />
                 查看 Demo
+              </a>
+            </Button>
+            <Button asChild variant="secondary" className="border-white/15 bg-white/10 text-white hover:bg-white/16">
+              <a href="#school-trial-mode">
+                <School className="h-4 w-4" />
+                学校试讲模式
               </a>
             </Button>
           </div>

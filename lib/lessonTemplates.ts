@@ -22,6 +22,12 @@ export type LessonTemplate = {
   topic: string;
   recommendedStyle: TeachingStyle;
   description: string;
+  caseProfile: {
+    whyGoodForDemo: string;
+    classroomValue: string;
+    aiHighlights: string[];
+    expectedAudience: string;
+  };
 };
 
 export const lessonTemplates: LessonTemplate[] = [
@@ -32,7 +38,13 @@ export const lessonTemplates: LessonTemplate[] = [
     version: "人教版",
     topic: "气候变化",
     recommendedStyle: "探究型",
-    description: "适合展示地图、案例和现实问题讨论"
+    description: "适合展示地图、案例和现实问题讨论",
+    caseProfile: {
+      whyGoodForDemo: "主题贴近现实，适合展示图片、问题链和跨区域案例分析。",
+      classroomValue: "帮助老师把抽象环境议题转成可观察、可讨论的课堂活动。",
+      aiHighlights: ["AI 配图与读图提示", "课堂讨论问题链", "低碳行动课后任务"],
+      expectedAudience: "适合给地理老师、教研主任和校长展示"
+    }
   },
   {
     id: "history-opium-war",
@@ -41,7 +53,13 @@ export const lessonTemplates: LessonTemplate[] = [
     version: "人教版",
     topic: "鸦片战争",
     recommendedStyle: "线索型",
-    description: "适合时间线、历史背景和事件因果分析"
+    description: "适合时间线、历史背景和事件因果分析",
+    caseProfile: {
+      whyGoodForDemo: "历史线索清晰，便于展示 AI 如何组织背景、人物与因果。",
+      classroomValue: "让历史课从事件罗列转向证据分析和观点讨论。",
+      aiHighlights: ["时间线课堂卡片", "因果链讲稿", "历史观点讨论提示"],
+      expectedAudience: "适合给文科老师、历史教研组和学校管理者展示"
+    }
   },
   {
     id: "math-fraction",
@@ -50,7 +68,13 @@ export const lessonTemplates: LessonTemplate[] = [
     version: "人教版",
     topic: "分数加减法",
     recommendedStyle: "练习型",
-    description: "适合公式推导、例题讲解和步骤板书"
+    description: "适合公式推导、例题讲解和步骤板书",
+    caseProfile: {
+      whyGoodForDemo: "知识点具体，能直观看到推导、例题和板书步骤的生成效果。",
+      classroomValue: "辅助老师把解题过程讲清楚，减少重复备题和板书设计时间。",
+      aiHighlights: ["公式与步骤卡片", "例题讲解提示", "易错点复盘建议"],
+      expectedAudience: "适合给数学老师、小学教研主任和校长展示"
+    }
   },
   {
     id: "english-past-tense",
@@ -59,7 +83,13 @@ export const lessonTemplates: LessonTemplate[] = [
     version: "人教版",
     topic: "一般过去时",
     recommendedStyle: "口语型",
-    description: "适合单词、句型、跟读和对话练习"
+    description: "适合单词、句型、跟读和对话练习",
+    caseProfile: {
+      whyGoodForDemo: "课堂活动感强，便于展示跟读、对话和即时互动。",
+      classroomValue: "帮助英语老师快速准备句型操练、口语任务和小测验。",
+      aiHighlights: ["核心句型卡片", "对话练习设计", "口语互动提示"],
+      expectedAudience: "适合给英语老师、信息化主任和校长展示"
+    }
   }
 ];
 
