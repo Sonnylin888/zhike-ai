@@ -1,4 +1,5 @@
 import { FeatureShowcase } from "@/components/FeatureShowcase";
+import { CooperationPage } from "@/components/CooperationPage";
 import { HeroSection } from "@/components/HeroSection";
 import { InputForm } from "@/components/InputForm";
 import { SchoolDemoSection } from "@/components/SchoolDemoSection";
@@ -14,6 +15,7 @@ export default function Home() {
         <InputForm />
       </section>
       <SchoolDemoSection />
+      <CooperationPage />
     </main>
   );
 }
