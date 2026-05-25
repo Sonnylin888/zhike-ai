@@ -8,7 +8,7 @@ export type TrialFeedback = {
   createdAt: string;
 };
 
-export const trialFeedbackStorageKey = "zhike-ai-trial-feedback";
+export const trialFeedbackStorageKey = "智课 AI-trial-feedback";
 
 export const feedbackRoles = ["老师", "校长", "信息化主任", "其他"];
 

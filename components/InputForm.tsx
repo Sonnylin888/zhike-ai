@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
+import { AgencyDemoMode } from "@/components/AgencyDemoMode";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DemoHealthCheck } from "@/components/DemoHealthCheck";
@@ -40,6 +41,11 @@ import { TeachingConsole } from "@/components/TeachingConsole";
 import { WorkflowNavigation } from "@/components/WorkflowNavigation";
 import { TrialFeedback } from "@/components/TrialFeedback";
 import { TrialSummaryPage } from "@/components/TrialSummaryPage";
+import { getAgencyDemoPlan } from "@/demoData/agencyDemo";
+import {
+  consumeDailyUsage,
+  readAgencySession
+} from "@/lib/agencyUsage";
 import {
   getSubjectStyleOptions,
   lessonTemplates,
@@ -227,6 +233,7 @@ export function InputForm() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [source, setSource] = useState("");
+  const [usageLimitReached, setUsageLimitReached] = useState(false);
 
   const canCopy = useMemo(() => Boolean(plan), [plan]);
   const paceSummary = useMemo(
@@ -304,15 +311,30 @@ export function InputForm() {
   }, []);
 
   async function generatePlan() {
-    await generateClassroomPackage(form);
+    await generateClassroomPackage(form, true);
   }
 
-  async function generateClassroomPackage(nextForm: FormState) {
+  async function generateClassroomPackage(nextForm: FormState, shouldConsumeUsage = true) {
     setLoading(true);
     setError("");
     setCopied(false);
+    setUsageLimitReached(false);
 
     try {
+      if (shouldConsumeUsage) {
+        const session = readAgencySession();
+        if (!session) {
+          setUsageLimitReached(true);
+          throw new Error("请先登录代理商测试账号，再使用 AI 生成。Demo 课堂内容仍可永久免费查看。");
+        }
+
+        const consumeResult = consumeDailyUsage(session.userId);
+        if (!consumeResult.ok) {
+          setUsageLimitReached(true);
+          throw new Error("今日 AI 体验次数已用完。Demo 课堂内容仍可继续查看和全屏演示。");
+        }
+      }
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -339,16 +361,42 @@ export function InputForm() {
   }
 
   async function startDemoMode() {
-    const template = lessonTemplates[0];
-    const nextForm: FormState = {
-      grade: template.grade,
-      subject: template.subject,
-      topic: template.topic,
-      textbookVersion: template.version,
-      teachingStyle: template.recommendedStyle
+    startFixedDemo("climate-change", false);
+  }
+
+  async function startFixedDemo(demoCaseId: string, autoPresent = false) {
+    const fixedPlan = getAgencyDemoPlan(demoCaseId);
+    const topicMap: Record<string, TeachingStyle> = {
+      "climate-change": "探究型",
+      "ocean-current": "图像分析型",
+      "china-terrain": "案例型",
+      earthquake: "互动型"
     };
-    setForm(nextForm);
-    await generateClassroomPackage(nextForm);
+    const topicTitleMap: Record<string, string> = {
+      "climate-change": "气候变化",
+      "ocean-current": "洋流",
+      "china-terrain": "中国地形",
+      earthquake: "地震"
+    };
+
+    setForm({
+      grade: "高中",
+      subject: "地理",
+      topic: topicTitleMap[demoCaseId] || "气候变化",
+      textbookVersion: "人教版",
+      teachingStyle: topicMap[demoCaseId] || "探究型"
+    });
+    setPlan(fixedPlan);
+    setPresentationIndex(0);
+    setResultViewMode("teacher");
+    setSource("fixed-demo");
+    setError("");
+    setUsageLimitReached(false);
+
+    if (autoPresent) {
+      setPresenting(true);
+      await document.documentElement.requestFullscreen?.().catch(() => undefined);
+    }
   }
 
   async function copyAll() {
@@ -383,6 +431,8 @@ export function InputForm() {
 
   return (
     <div className="space-y-6">
+      <AgencyDemoMode onSelectDemo={startFixedDemo} />
+
       <LessonTemplateGallery
         activeId={activeTemplateId}
         templates={lessonTemplates}
@@ -517,7 +567,29 @@ export function InputForm() {
 
           {error ? (
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
+              <p className="font-semibold">{error}</p>
+              {usageLimitReached ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href="#cooperation"
+                    className="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    联系合作
+                  </a>
+                  <a
+                    href="#cooperation"
+                    className="rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700"
+                  >
+                    获取正式授权
+                  </a>
+                  <a
+                    href="#school-trial-mode"
+                    className="rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700"
+                  >
+                    联系代理支持
+                  </a>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </CardContent>
@@ -556,9 +628,9 @@ export function InputForm() {
 
       {plan && !loading ? (
         <div className="space-y-5">
-          {source === "demo-fallback" || source === "ai-fallback" ? (
+          {source === "demo-fallback" || source === "ai-fallback" || source === "fixed-demo" ? (
             <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
-              演示模板已就绪：已生成可试讲的 AI 课堂内容，支持配图、互动与全屏演示。
+              演示模板已就绪：固定 Demo 不扣 AI 次数，支持配图、互动与全屏演示。
             </div>
           ) : null}
 

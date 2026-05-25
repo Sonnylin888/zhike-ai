@@ -19,7 +19,7 @@ export function HeroSection() {
               ZK
             </div>
             <div>
-              <p className="text-base font-semibold">zhike-ai v1.2</p>
+              <p className="text-base font-semibold">智课 AI v1.2</p>
               <p className="text-xs text-cyan-100/70">AI Teaching Console</p>
             </div>
           </div>

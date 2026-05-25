@@ -19,7 +19,11 @@ export function getDemoHealth({
   activeTemplateLabel,
   fullscreenSupported
 }: DemoHealthInput): DemoHealthItem[] {
-  const usesFallback = source === "demo-fallback" || source === "ai-fallback" || !source;
+  const usesFallback =
+    source === "demo-fallback" ||
+    source === "ai-fallback" ||
+    source === "fixed-demo" ||
+    !source;
   const dataComplete = Boolean(
     plan?.slides?.length &&
       plan.lessonWorkflow &&

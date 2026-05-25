@@ -63,7 +63,7 @@ export function TrialFeedback() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "zhike-ai-trial-feedback.json";
+    link.download = "智课 AI-trial-feedback.json";
     link.click();
     URL.revokeObjectURL(url);
   }

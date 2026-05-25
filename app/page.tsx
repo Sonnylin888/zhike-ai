@@ -1,3 +1,4 @@
+import { AIUsageStatus } from "@/components/AIUsageStatus";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { CooperationPage } from "@/components/CooperationPage";
 import { HeroSection } from "@/components/HeroSection";
@@ -8,6 +9,7 @@ import { SchoolTrialMode } from "@/components/SchoolTrialMode";
 export default function Home() {
   return (
     <main className="min-h-screen">
+      <AIUsageStatus />
       <HeroSection />
       <SchoolTrialMode />
       <FeatureShowcase />

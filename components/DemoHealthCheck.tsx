@@ -29,7 +29,11 @@ export function DemoHealthCheck({ plan, source, activeTemplateLabel }: Props) {
     [activeTemplateLabel, fullscreenSupported, plan, source]
   );
 
-  const usesFallback = source === "demo-fallback" || source === "ai-fallback" || !source;
+  const usesFallback =
+    source === "demo-fallback" ||
+    source === "ai-fallback" ||
+    source === "fixed-demo" ||
+    !source;
 
   return (
     <section className="rounded-lg border border-cyan-900/10 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
