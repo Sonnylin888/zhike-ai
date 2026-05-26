@@ -1,0 +1,17 @@
+{
+  "name": "智课 AI 教学演示系统",
+  "short_name": "智课",
+  "description": "Web First 的 AI 教学课堂演示系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "/demo-assets/logo.svg",
+      "sizes": "160x160",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

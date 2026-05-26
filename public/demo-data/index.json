@@ -1,0 +1,30 @@
+{
+  "name": "智课离线 Demo 数据",
+  "version": "1.4.0",
+  "cases": [
+    {
+      "id": "climate-change",
+      "title": "气候变化",
+      "subject": "地理",
+      "availableOffline": true
+    },
+    {
+      "id": "ocean-current",
+      "title": "洋流",
+      "subject": "地理",
+      "availableOffline": true
+    },
+    {
+      "id": "china-terrain",
+      "title": "中国地形",
+      "subject": "地理",
+      "availableOffline": true
+    },
+    {
+      "id": "earthquake",
+      "title": "地震",
+      "subject": "地理",
+      "availableOffline": true
+    }
+  ]
+}

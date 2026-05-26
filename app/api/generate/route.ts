@@ -1,11 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import {
-  buildTeachingPrompt,
-  getDemoTeachingPlan,
-  type Slide,
-  type TeachingPlan
-} from "@/lib/prompt";
+import { buildTeachingPrompt, getDemoTeachingPlan, type TeachingPlan } from "@/lib/prompt";
 import { findTextbookContent, type TeacherInput } from "@/lib/textbook";
 
 export const runtime = "nodejs";
@@ -19,513 +14,29 @@ function isValidInput(input: Partial<TeacherInput>) {
   );
 }
 
-function parseTeachingPlan(content: string, input: TeacherInput): TeachingPlan {
-  const cleaned = content
+function extractJson(content: string) {
+  return content
     .replace(/^```json/i, "")
     .replace(/^```/, "")
     .replace(/```$/, "")
     .trim();
-  return normalizeTeachingPlan(JSON.parse(cleaned) as Partial<TeachingPlan>, input);
 }
 
-function normalizeTeachingPlan(
-  plan: Partial<TeachingPlan>,
-  input?: TeacherInput
-): TeachingPlan {
-  const lessonPlan = Array.isArray(plan.lessonPlan) ? plan.lessonPlan : [];
-  const pptOutline = Array.isArray(plan.pptOutline) ? plan.pptOutline : [];
-  const interactionQuestions = Array.isArray(plan.interactionQuestions)
-    ? plan.interactionQuestions
-    : [];
-  const homework = Array.isArray(plan.homework) ? plan.homework : [];
-
-  const normalizedSlides = normalizeSlides(
-    plan.slides,
-    pptOutline,
-    interactionQuestions,
-    input?.subject
+function hasRenderableSlides(plan: Partial<TeachingPlan>) {
+  const firstSlide = plan.slides?.[0];
+  return Boolean(
+    Array.isArray(plan.lessonPlan) &&
+      Array.isArray(plan.pptOutline) &&
+      Array.isArray(plan.interactionQuestions) &&
+      Array.isArray(plan.homework) &&
+      Array.isArray(plan.slides) &&
+      firstSlide?.title &&
+      Array.isArray(firstSlide.content) &&
+      firstSlide.speakerScript &&
+      firstSlide.paceControl &&
+      firstSlide.questionGuide &&
+      firstSlide.quiz
   );
-
-  return {
-    lessonPlan,
-    pptOutline,
-    interactionQuestions,
-    homework,
-    lessonWorkflow: normalizeLessonWorkflow(
-      plan.lessonWorkflow,
-      lessonPlan,
-      homework,
-      normalizedSlides
-    ),
-    afterClassSummary: normalizeAfterClassSummary(
-      plan.afterClassSummary,
-      normalizedSlides
-    ),
-    homeworkPlan: normalizeHomeworkPlan(plan.homeworkPlan, homework),
-    teachingReflection: normalizeTeachingReflection(
-      plan.teachingReflection,
-      normalizedSlides
-    ),
-    lessonSummary: normalizeLessonSummary(plan.lessonSummary, normalizedSlides, interactionQuestions),
-    slides: normalizedSlides
-  };
-}
-
-function normalizeSlides(
-  slides: TeachingPlan["slides"] | undefined,
-  pptOutline: string[],
-  interactionQuestions: string[],
-  subject = ""
-): Slide[] {
-  if (Array.isArray(slides) && slides.length > 0) {
-    return slides.slice(0, 8).map((slide, index) => ({
-      title: slide.title?.trim() || `第 ${index + 1} 页`,
-      content: Array.isArray(slide.content)
-        ? slide.content.filter(Boolean).slice(0, 4)
-        : [],
-      teacherNote: slide.teacherNote?.trim() || "结合教材素材，引导学生观察、描述并解释地理现象。",
-      question:
-        slide.question?.trim() ||
-        interactionQuestions[index % Math.max(interactionQuestions.length, 1)] ||
-        "你能用今天学到的方法解释这个现象吗？",
-      imagePrompt:
-        slide.imagePrompt?.trim() ||
-        `${slide.title || pptOutline[index] || "地理课堂"}、课堂演示、AI 配图、科技感`,
-      duration: slide.duration?.trim() || `${index === 0 ? 4 : 5}分钟`,
-      interactionCount:
-        typeof slide.interactionCount === "number"
-          ? slide.interactionCount
-          : index % 2 === 0
-            ? 1
-            : 2,
-      paceTip:
-        slide.paceTip?.trim() ||
-        "建议此处停顿 10 秒，让学生先表达，再进入讲解。",
-      teacherTip:
-        slide.teacherTip?.trim() ||
-        slide.teacherNote?.trim() ||
-        "建议此处进入课堂讨论，先让学生观察，再引导归纳。",
-      discussionPrompt:
-        slide.discussionPrompt?.trim() ||
-        `围绕“${slide.question || slide.title || "本页问题"}”进行 1 分钟同桌讨论，并准备一个证据。`,
-      boardWriting: normalizeBoardWriting(slide, index),
-      speakerScript: normalizeSpeakerScript(slide, index),
-      paceControl: normalizePaceControl(slide, index),
-      questionGuide: normalizeQuestionGuide(slide, index),
-      ...normalizeSubjectModules(slide, `${subject} ${slide.title || ""}`, index),
-      speakerAssistant: normalizeSpeakerAssistant(slide, index),
-      quiz: normalizeQuiz(slide.quiz, slide.question, index)
-    }));
-  }
-
-  return pptOutline.map((outline, index) => {
-    const title = outline.replace(/^第\s*\d+\s*页[：:]\s*/, "").split(/[：:]/)[0];
-    const detail = outline.includes("：")
-      ? outline.split("：").slice(1).join("：")
-      : outline;
-
-    return {
-      title: title || `第 ${index + 1} 页`,
-      content: detail
-        .split(/[、，,；;]/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 4),
-      teacherNote: "围绕本页关键词展开讲解，先让学生观察材料，再归纳地理规律。",
-      question:
-        interactionQuestions[index % Math.max(interactionQuestions.length, 1)] ||
-        "你能从这页材料中发现哪些地理信息？",
-      imagePrompt: `${title || detail}、课堂投影、AI 教学、地理可视化`,
-      duration: `${index === 0 ? 4 : 5}分钟`,
-      interactionCount: index % 2 === 0 ? 1 : 2,
-      paceTip: "建议此处停顿并提问，确认学生能说出判断依据。",
-      teacherTip: "围绕本页材料做一次短讨论，让学生用地理术语表达判断依据。",
-      discussionPrompt: `小组讨论：${interactionQuestions[index] || "本页材料能支持哪些地理判断？"}`,
-      boardWriting: normalizeBoardWriting(undefined, index, title || detail),
-      speakerScript: normalizeSpeakerScript(undefined, index, title || detail),
-      paceControl: normalizePaceControl(undefined, index),
-      questionGuide: normalizeQuestionGuide(undefined, index, title || detail),
-      ...normalizeSubjectModules(undefined, `${subject} ${title || detail}`, index),
-      speakerAssistant: normalizeSpeakerAssistant(undefined, index, title || detail),
-      quiz: normalizeQuiz(undefined, interactionQuestions[index], index)
-    };
-  });
-}
-
-function normalizeSubjectModules(
-  slide: Partial<Slide> | undefined,
-  title: string,
-  index: number
-): Pick<Slide, "geoModule" | "mathModule" | "historyModule" | "englishModule"> {
-  const text = `${title} ${slide?.title || ""} ${slide?.imagePrompt || ""}`;
-  if (slide?.mathModule || /数学|分数|公式|fraction/i.test(text)) {
-    return {
-      mathModule: slide?.mathModule || {
-        formula: "核心公式 / 方法",
-        steps: ["读题", "列式", "计算", "检查"],
-        exampleProblem: slide?.question || "根据本页内容完成一个例题。",
-        solutionHint: "先说清每一步为什么这样做。"
-      }
-    };
-  }
-  if (slide?.historyModule || /历史|战争|条约|timeline|war/i.test(text)) {
-    return {
-      historyModule: slide?.historyModule || {
-        timeline: [`节点 ${index + 1}`, "背景", "影响"],
-        keyFigures: ["关键人物"],
-        causeEffect: slide?.discussionPrompt || "从背景、经过和影响说明事件因果。"
-      }
-    };
-  }
-  if (slide?.englishModule || /英语|english|grammar|dialogue|past/i.test(text)) {
-    return {
-      englishModule: slide?.englishModule || {
-        vocabulary: ["key word", "practice"],
-        sentencePattern: slide?.question || "Core sentence pattern",
-        speakingTask: "Pair work: ask and answer.",
-        dialogue: ["A: Ask a question.", "B: Give an answer."]
-      }
-    };
-  }
-  return {
-    geoModule: slide?.geoModule || {
-      mapFocus: "本页关注区域与空间差异",
-      caseStudy: title || "课堂案例",
-      realWorldConnection: slide?.discussionPrompt || "联系现实生活中的地理问题。"
-    }
-  };
-}
-
-function parseMinutes(duration: string | undefined) {
-  const match = duration?.match(/\d+/);
-  return match ? Number(match[0]) : 4;
-}
-
-function normalizeLessonWorkflow(
-  workflow: Partial<NonNullable<TeachingPlan["lessonWorkflow"]>> | undefined,
-  lessonPlan: string[],
-  homework: string[],
-  slides: Slide[]
-): NonNullable<TeachingPlan["lessonWorkflow"]> {
-  const keyPoints = slides.flatMap((slide) => slide.content).slice(0, 3);
-
-  return {
-    beforeClass: {
-      lessonGoal:
-        workflow?.beforeClass?.lessonGoal?.trim() ||
-        lessonPlan[0] ||
-        "完成本节课核心目标，并准备课堂互动。",
-      keyPoints:
-        Array.isArray(workflow?.beforeClass?.keyPoints) &&
-        workflow.beforeClass.keyPoints.length > 0
-          ? workflow.beforeClass.keyPoints.filter(Boolean).slice(0, 4)
-          : keyPoints.length
-            ? keyPoints
-            : ["核心概念", "课堂互动", "总结迁移"],
-      materials:
-        Array.isArray(workflow?.beforeClass?.materials) &&
-        workflow.beforeClass.materials.length > 0
-          ? workflow.beforeClass.materials.filter(Boolean).slice(0, 4)
-          : ["投影演示页", "导入素材", "随堂问题"],
-      teacherPreparation:
-        Array.isArray(workflow?.beforeClass?.teacherPreparation) &&
-        workflow.beforeClass.teacherPreparation.length > 0
-          ? workflow.beforeClass.teacherPreparation.filter(Boolean).slice(0, 4)
-          : ["确认课堂节奏", "预设学生问题", "准备板书关键词"]
-    },
-    inClass: {
-      teachingFlow:
-        Array.isArray(workflow?.inClass?.teachingFlow) &&
-        workflow.inClass.teachingFlow.length > 0
-          ? workflow.inClass.teachingFlow.filter(Boolean).slice(0, 5)
-          : ["导入", "讲解", "互动", "总结"],
-      interactionMoments:
-        Array.isArray(workflow?.inClass?.interactionMoments) &&
-        workflow.inClass.interactionMoments.length > 0
-          ? workflow.inClass.interactionMoments.filter(Boolean).slice(0, 4)
-          : slides.map((slide) => slide.questionGuide.warmUpQuestion).slice(0, 3),
-      pacePlan:
-        workflow?.inClass?.pacePlan?.trim() ||
-        `围绕 ${slides.length} 页演示推进，重点页保留互动时间。`
-    },
-    afterClass: {
-      summary:
-        workflow?.afterClass?.summary?.trim() ||
-        "课后帮助学生回收核心概念、方法和课堂问题。",
-      homework:
-        Array.isArray(workflow?.afterClass?.homework) &&
-        workflow.afterClass.homework.length > 0
-          ? workflow.afterClass.homework.filter(Boolean).slice(0, 3)
-          : homework.slice(0, 2),
-      reflection:
-        workflow?.afterClass?.reflection?.trim() ||
-        "复盘学生是否能说出关键依据，并记录下次需要补讲的点。"
-    }
-  };
-}
-
-function normalizeAfterClassSummary(
-  summary: Partial<NonNullable<TeachingPlan["afterClassSummary"]>> | undefined,
-  slides: Slide[]
-): NonNullable<TeachingPlan["afterClassSummary"]> {
-  return {
-    classSummary:
-      summary?.classSummary?.trim() ||
-      `本节课围绕“${slides[0]?.title || "核心主题"}”完成讲解、互动和总结。`,
-    studentTakeaways:
-      Array.isArray(summary?.studentTakeaways) &&
-      summary.studentTakeaways.length > 0
-        ? summary.studentTakeaways.filter(Boolean).slice(0, 4)
-        : slides.flatMap((slide) => slide.content).slice(0, 3),
-    teacherReflection:
-      summary?.teacherReflection?.trim() ||
-      "关注学生是否真正理解关键依据，而不是只记住结论。",
-    nextLessonSuggestion:
-      summary?.nextLessonSuggestion?.trim() ||
-      "下一节课可从本节易错点切入，做一次短复习后进入新内容。"
-  };
-}
-
-function normalizeHomeworkPlan(
-  homeworkPlan: Partial<NonNullable<TeachingPlan["homeworkPlan"]>> | undefined,
-  homework: string[]
-): NonNullable<TeachingPlan["homeworkPlan"]> {
-  return {
-    basicHomework:
-      Array.isArray(homeworkPlan?.basicHomework) &&
-      homeworkPlan.basicHomework.length > 0
-        ? homeworkPlan.basicHomework.filter(Boolean).slice(0, 3)
-        : homework.slice(0, 2),
-    advancedHomework:
-      Array.isArray(homeworkPlan?.advancedHomework) &&
-      homeworkPlan.advancedHomework.length > 0
-        ? homeworkPlan.advancedHomework.filter(Boolean).slice(0, 2)
-        : [homework[2] || "完成一个本课主题的迁移练习。"],
-    optionalTask:
-      homeworkPlan?.optionalTask?.trim() ||
-      "选择一个课堂问题，整理成 100 字学习札记。",
-    estimatedTime: homeworkPlan?.estimatedTime?.trim() || "20分钟"
-  };
-}
-
-function normalizeTeachingReflection(
-  reflection: Partial<NonNullable<TeachingPlan["teachingReflection"]>> | undefined,
-  slides: Slide[]
-): NonNullable<TeachingPlan["teachingReflection"]> {
-  return {
-    possibleProblems:
-      Array.isArray(reflection?.possibleProblems) &&
-      reflection.possibleProblems.length > 0
-        ? reflection.possibleProblems.filter(Boolean).slice(0, 3)
-        : ["学生可能只记结论，忽略推理过程", "课堂互动时间可能被讲解挤压"],
-    adjustmentSuggestions:
-      Array.isArray(reflection?.adjustmentSuggestions) &&
-      reflection.adjustmentSuggestions.length > 0
-        ? reflection.adjustmentSuggestions.filter(Boolean).slice(0, 3)
-        : ["保留至少一次追问", "用板书固定核心路径"],
-    studentMisconceptions:
-      Array.isArray(reflection?.studentMisconceptions) &&
-      reflection.studentMisconceptions.length > 0
-        ? reflection.studentMisconceptions.filter(Boolean).slice(0, 3)
-        : slides[0]?.speakerScript.commonMistakes.slice(0, 2) || ["概念理解不完整"],
-    reteachSuggestion:
-      reflection?.reteachSuggestion?.trim() ||
-      "下节课开头用 3 分钟复盘本课关键问题和易错点。"
-  };
-}
-
-function normalizeLessonSummary(
-  summary: Partial<NonNullable<TeachingPlan["lessonSummary"]>> | undefined,
-  slides: Slide[],
-  interactionQuestions: string[]
-): NonNullable<TeachingPlan["lessonSummary"]> {
-  const totalDuration = slides.reduce(
-    (sum, slide) => sum + parseMinutes(slide.duration),
-    0
-  );
-  const totalInteractions = slides.reduce(
-    (sum, slide) => sum + slide.interactionCount,
-    0
-  );
-
-  return {
-    totalDuration: summary?.totalDuration?.trim() || `${totalDuration || 40}分钟`,
-    totalSlides: summary?.totalSlides || slides.length,
-    totalQuestions:
-      summary?.totalQuestions ||
-      interactionQuestions.length + slides.length,
-    totalInteractions: summary?.totalInteractions || totalInteractions,
-    teachingStyle: summary?.teachingStyle?.trim() || "AI 课堂"
-  };
-}
-
-function normalizeBoardWriting(
-  slide: Partial<Slide> | undefined,
-  index: number,
-  fallbackTitle = "本页重点"
-): string[] {
-  if (Array.isArray(slide?.boardWriting) && slide.boardWriting.length > 0) {
-    return slide.boardWriting.filter(Boolean).slice(0, 4);
-  }
-
-  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
-  return [`一、${title}`, "二、核心证据", "三、课堂结论"];
-}
-
-function normalizeSpeakerScript(
-  slide: Partial<Slide> | undefined,
-  index: number,
-  fallbackTitle = "本页内容"
-): Slide["speakerScript"] {
-  const script = slide?.speakerScript;
-  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
-  const boardWriting = normalizeBoardWriting(slide, index, title);
-
-  return {
-    opening:
-      script?.opening?.trim() ||
-      `同学们，我们先看“${title}”，用一个问题把这页内容带起来。`,
-    explanation:
-      script?.explanation?.trim() ||
-      slide?.speakerAssistant?.talkScript ||
-      slide?.teacherNote ||
-      "这一页重点是先观察材料，再说出依据，最后形成课堂结论。",
-    transition:
-      script?.transition?.trim() ||
-      "接下来我们带着这个判断，继续看下一页的证据和应用。",
-    boardWriting:
-      Array.isArray(script?.boardWriting) && script.boardWriting.length > 0
-        ? script.boardWriting.filter(Boolean).slice(0, 4)
-        : boardWriting,
-    commonMistakes:
-      Array.isArray(script?.commonMistakes) && script.commonMistakes.length > 0
-        ? script.commonMistakes.filter(Boolean).slice(0, 3)
-        : ["只说结论，没有说明依据", "把短期现象当作长期规律"]
-  };
-}
-
-function normalizePaceControl(
-  slide: Partial<Slide> | undefined,
-  index: number
-): Slide["paceControl"] {
-  const pace = slide?.paceControl;
-  const duration = pace?.duration?.trim() || slide?.duration || `${index === 0 ? 4 : 5}分钟`;
-  const minutes = parseMinutes(duration);
-  const questionMinutes = Math.max(1, Math.min(2, slide?.interactionCount || 1));
-
-  return {
-    duration,
-    explainTime: pace?.explainTime?.trim() || `${Math.max(1, minutes - questionMinutes)}分钟`,
-    questionTime: pace?.questionTime?.trim() || `${questionMinutes}分钟`,
-    interactionType:
-      pace?.interactionType?.trim() ||
-      (slide?.quiz?.type === "raiseHand"
-        ? "举手互动"
-        : slide?.quiz?.type === "single"
-          ? "小测验"
-          : "提问"),
-    paceWarning:
-      pace?.paceWarning?.trim() ||
-      slide?.paceTip ||
-      "本页不要讲太久，重点留时间给学生表达。"
-  };
-}
-
-function normalizeQuestionGuide(
-  slide: Partial<Slide> | undefined,
-  index: number,
-  fallbackTitle = "本页内容"
-): Slide["questionGuide"] {
-  const guide = slide?.questionGuide;
-  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
-
-  return {
-    warmUpQuestion:
-      guide?.warmUpQuestion?.trim() ||
-      slide?.question ||
-      `看到“${title}”，你首先想到什么？`,
-    deepQuestion:
-      guide?.deepQuestion?.trim() ||
-      slide?.discussionPrompt ||
-      "这个结论背后有哪些证据可以支持？",
-    followUpQuestion:
-      guide?.followUpQuestion?.trim() ||
-      "你能再补充一个理由或反例吗？",
-    expectedAnswer:
-      guide?.expectedAnswer?.trim() ||
-      slide?.speakerAssistant?.teacherAnswers?.[0] ||
-      "应回到材料证据，并用本页核心概念解释。"
-  };
-}
-
-function normalizeSpeakerAssistant(
-  slide: Partial<Slide> | undefined,
-  index: number,
-  fallbackTitle = "本页内容"
-): Slide["speakerAssistant"] {
-  const assistant = slide?.speakerAssistant;
-  const title = slide?.title || fallbackTitle || `第 ${index + 1} 页`;
-  const question = slide?.question || "学生可能会追问本页结论如何得出。";
-
-  return {
-    talkScript:
-      assistant?.talkScript?.trim() ||
-      `围绕“${title}”先讲情境，再引导学生说出证据和结论。`,
-    keyPoints:
-      Array.isArray(assistant?.keyPoints) && assistant.keyPoints.length > 0
-        ? assistant.keyPoints.filter(Boolean).slice(0, 3)
-        : [title, "证据解读", "课堂追问"],
-    studentQuestions:
-      Array.isArray(assistant?.studentQuestions) &&
-      assistant.studentQuestions.length > 0
-        ? assistant.studentQuestions.filter(Boolean).slice(0, 2)
-        : [question],
-    teacherAnswers:
-      Array.isArray(assistant?.teacherAnswers) && assistant.teacherAnswers.length > 0
-        ? assistant.teacherAnswers.filter(Boolean).slice(0, 2)
-        : ["先回到材料证据，再用本页核心概念解释。"]
-  };
-}
-
-function normalizeQuiz(
-  quiz: Partial<Slide["quiz"]> | undefined,
-  fallbackQuestion: string | undefined,
-  index: number
-): Slide["quiz"] {
-  const quizTypes: Slide["quiz"]["type"][] = ["raiseHand", "single", "trueFalse"];
-  const type = quizTypes.includes(quiz?.type as Slide["quiz"]["type"])
-    ? (quiz?.type as Slide["quiz"]["type"])
-    : quizTypes[index % quizTypes.length];
-  const defaults: Record<Slide["quiz"]["type"], Slide["quiz"]> = {
-    raiseHand: {
-      type: "raiseHand",
-      question: fallbackQuestion || "你支持这个判断吗？请用举手表达你的选择。",
-      options: ["支持", "不确定", "有不同观点"],
-      answer: "开放讨论"
-    },
-    single: {
-      type: "single",
-      question: fallbackQuestion || "下列哪项最符合本页的核心结论？",
-      options: ["依据材料判断", "只看单一现象", "忽略区域差异"],
-      answer: "依据材料判断"
-    },
-    trueFalse: {
-      type: "trueFalse",
-      question: fallbackQuestion || "判断：地理结论需要结合证据和区域背景。",
-      options: ["正确", "错误"],
-      answer: "正确"
-    }
-  };
-  const fallback = defaults[type];
-
-  return {
-    type,
-    question: quiz?.question?.trim() || fallback.question,
-    options: Array.isArray(quiz?.options) && quiz.options.length > 0
-      ? quiz.options.filter(Boolean).slice(0, 4)
-      : fallback.options,
-    answer: quiz?.answer?.trim() || fallback.answer
-  };
 }
 
 function demoFallbackResponse(
@@ -559,10 +70,10 @@ export async function POST(request: Request) {
     const apiKey = openaiApiKey || deepseekApiKey;
     const baseURL = isUsingOpenAI
       ? process.env.OPENAI_BASE_URL?.trim()
-      : process.env.DEEPSEEK_BASE_URL?.trim();
+      : process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
     const model = isUsingOpenAI
       ? process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"
-      : process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-flash";
+      : process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
 
     if (!apiKey) {
       return demoFallbackResponse(textbook, input);
@@ -571,18 +82,18 @@ export async function POST(request: Request) {
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL
+        baseURL,
+        timeout: 25000
       });
 
       const completion = await client.chat.completions.create({
         model,
         temperature: 0.35,
-        max_tokens: 2200,
+        max_tokens: 2600,
         messages: [
           {
             role: "system",
-            content:
-              "你是严谨、务实的高中地理教学设计专家。你只输出可解析 JSON。"
+            content: "你是严谨、务实的一线教学设计专家。你只输出可解析 JSON。"
           },
           {
             role: "user",
@@ -593,13 +104,15 @@ export async function POST(request: Request) {
       });
 
       const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("AI 未返回内容");
 
-      if (!content) {
-        throw new Error("AI 未返回内容");
+      const plan = JSON.parse(extractJson(content)) as Partial<TeachingPlan>;
+      if (!hasRenderableSlides(plan)) {
+        throw new Error("AI 返回结构不完整");
       }
 
       return NextResponse.json({
-        plan: parseTeachingPlan(content, input),
+        plan: plan as TeachingPlan,
         source: "ai",
         textbook
       });

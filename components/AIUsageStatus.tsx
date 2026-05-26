@@ -2,6 +2,7 @@
 
 import { Gauge, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { NetworkStatusBadge } from "@/components/NetworkStatusBadge";
 import {
   agencyUsageChangedEvent,
   readAgencySession,
@@ -38,6 +39,7 @@ export function AIUsageStatus() {
           代理商体验模式
         </div>
         <div className="flex flex-wrap items-center gap-3 text-slate-600">
+          <NetworkStatusBadge />
           <span>
             {session ? `当前账号：${session.userId}` : "请登录代理商测试账号"}
           </span>

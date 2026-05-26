@@ -19,25 +19,25 @@ export function HeroSection() {
               ZK
             </div>
             <div>
-              <p className="text-base font-semibold">智课 AI v1.2</p>
-              <p className="text-xs text-cyan-100/70">AI Teaching Console</p>
+              <p className="text-base font-semibold">智课 v1.4</p>
+              <p className="text-xs text-cyan-100/70">Web AI Classroom</p>
             </div>
           </div>
           <div className="hidden rounded-md border border-white/14 bg-white/10 px-3 py-1.5 text-xs font-semibold text-cyan-50 backdrop-blur sm:block">
-            Future Classroom Demo
+            Web First Demo
           </div>
         </header>
 
         <div className="max-w-4xl py-14">
           <p className="mb-5 inline-flex items-center gap-2 rounded-md border border-cyan-200/20 bg-cyan-200/10 px-3 py-1.5 text-sm font-semibold text-cyan-100">
             <Sparkles className="h-4 w-4" />
-            教师主导，AI 辅助课堂工作流
+            Web First，打开网址即可演示
           </p>
           <h1 className="text-5xl font-semibold leading-[1.04] tracking-normal md:text-7xl">
             AI 未来课堂
           </h1>
           <p className="mt-6 max-w-2xl text-xl leading-8 text-slate-100/86">
-            30 秒生成一整节 AI 课堂，从课前备课、课堂演示到课后复盘，让老师把时间留给真正的教学判断。
+            代理商打开网址即可登录 Demo Classroom，一键进入全屏 AI 课堂演示；AI 服务异常时自动切换 Demo 模式。
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button
@@ -46,7 +46,7 @@ export function HeroSection() {
             >
               <a href="#classroom-workbench">
                 <MonitorPlay className="h-4 w-4" />
-                开始生成课堂
+                进入 Demo Classroom
               </a>
             </Button>
             <Button asChild variant="secondary" className="border-white/15 bg-white/10 text-white hover:bg-white/16">
@@ -71,11 +71,11 @@ export function HeroSection() {
         </div>
 
         <div className="grid gap-3 pb-4 md:grid-cols-3">
-          {["AI 教师工作台", "沉浸式课堂播放", "课后总结与复盘"].map((item) => (
+          {["打开网址即演示", "大屏全屏课堂", "AI 异常自动兜底"].map((item) => (
             <div key={item} className="rounded-lg border border-white/10 bg-white/8 p-4 backdrop-blur">
               <p className="text-sm font-semibold text-cyan-100">{item}</p>
               <p className="mt-2 text-xs leading-5 text-slate-300">
-                面向学校 Demo 的稳定课堂体验，不替代教师，只减少重复工作。
+                面向代理商推广的 Web 演示体验，不依赖安装，不让 AI 异常打断展示。
               </p>
             </div>
           ))}

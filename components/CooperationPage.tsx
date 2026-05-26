@@ -24,7 +24,7 @@ export function CooperationPage() {
               AI 未来课堂合作方案
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-              智课 AI 面向学校试讲、教研展示和未来课堂方案沟通，聚焦教师主导的 AI 课堂工作流，帮助学校把 AI 教育落到具体课堂场景里。
+              智课面向学校试讲、教研展示和未来课堂方案沟通，优先采用 Web Demo 方式，聚焦教师主导的 AI 课堂工作流，帮助学校把 AI 教育落到具体课堂场景里。
             </p>
           </div>
           <div className="grid content-start gap-3">

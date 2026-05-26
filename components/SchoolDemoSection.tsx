@@ -18,7 +18,7 @@ export function SchoolDemoSection() {
             </p>
             <h2 className="mt-3 text-3xl font-semibold">面向学校展示的 AI 课堂流程</h2>
             <p className="mt-4 text-base leading-7 text-slate-300">
-              智课 AI 展示的是教师工作流的减负能力：备课更快、上课更稳、互动更清楚、课后更容易复盘。
+              智课展示的是教师工作流的减负能力：打开网址即可演示，备课更快、上课更稳、互动更清楚、课后更容易复盘。
             </p>
           </div>
           <div className="grid gap-3">

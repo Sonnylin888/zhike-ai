@@ -30,6 +30,7 @@ import { DemoHealthCheck } from "@/components/DemoHealthCheck";
 import { HomeworkPlanCard } from "@/components/HomeworkPlanCard";
 import { LessonTemplateGallery } from "@/components/LessonTemplateGallery";
 import { LessonWorkflowPanel } from "@/components/LessonWorkflowPanel";
+import { OfflineDemoNotice } from "@/components/OfflineDemoNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PaceControlCard } from "@/components/PaceControlCard";
@@ -42,10 +43,12 @@ import { WorkflowNavigation } from "@/components/WorkflowNavigation";
 import { TrialFeedback } from "@/components/TrialFeedback";
 import { TrialSummaryPage } from "@/components/TrialSummaryPage";
 import { getAgencyDemoPlan } from "@/demoData/agencyDemo";
+import { aiFallbackMessage } from "@/lib/aiFallback";
 import {
   consumeDailyUsage,
   readAgencySession
 } from "@/lib/agencyUsage";
+import { logError, logInfo, logWarn } from "@/lib/localLogs";
 import {
   getSubjectStyleOptions,
   lessonTemplates,
@@ -321,6 +324,16 @@ export function InputForm() {
     setUsageLimitReached(false);
 
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setPlan(getAgencyDemoPlan("climate-change"));
+        setPresentationIndex(0);
+        setResultViewMode("teacher");
+        setSource("fixed-demo");
+        setError("当前网络不可用，可继续使用 Demo 演示模式。");
+        await logWarn("AI generation skipped because network is offline");
+        return;
+      }
+
       if (shouldConsumeUsage) {
         const session = readAgencySession();
         if (!session) {
@@ -353,8 +366,28 @@ export function InputForm() {
       setPresentationIndex(0);
       setResultViewMode("teacher");
       setSource(data.source || "");
+      if (data.source === "ai-fallback" || data.source === "demo-fallback") {
+        setError("当前 AI 服务不可用，已切换至 Demo 模式。");
+      }
+      await logInfo("AI classroom package generated", {
+        source: data.source || "ai"
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请稍后重试。");
+      const message = err instanceof Error ? err.message : "生成失败，请稍后重试。";
+      const isUsageOrLoginError =
+        message.includes("登录代理商") || message.includes("体验次数");
+
+      if (isUsageOrLoginError) {
+        setError(message);
+        await logWarn("AI generation blocked", { message });
+      } else {
+        setPlan(getAgencyDemoPlan("climate-change"));
+        setPresentationIndex(0);
+        setResultViewMode("teacher");
+        setSource("fixed-demo");
+        setError(`${aiFallbackMessage} ${message}`);
+        await logError("AI generation failed, fallback demo loaded", { message });
+      }
     } finally {
       setLoading(false);
     }
@@ -392,6 +425,7 @@ export function InputForm() {
     setSource("fixed-demo");
     setError("");
     setUsageLimitReached(false);
+    await logInfo("Fixed demo classroom loaded", { demoCaseId });
 
     if (autoPresent) {
       setPresenting(true);
@@ -432,6 +466,7 @@ export function InputForm() {
   return (
     <div className="space-y-6">
       <AgencyDemoMode onSelectDemo={startFixedDemo} />
+      <OfflineDemoNotice />
 
       <LessonTemplateGallery
         activeId={activeTemplateId}

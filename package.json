@@ -1,12 +1,23 @@
 {
   "name": "ai-teaching-assistant-mvp",
   "version": "0.1.0",
+  "author": "智课",
+  "description": "智课本地 AI 教学演示软件",
   "private": true,
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start -p ${PORT:-3000}",
+    "start:cloudbase": "next start -p ${PORT:-3000}",
+    "lint": "next lint",
+    "deploy:cloudbase": "tcb app deploy",
+    "electron:start": "electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "npm run build && tsc -p electron/tsconfig.json",
+    "dist:win": "npm run electron:build && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win zip --x64",
+    "dist:win:mirror": "npm run electron:build && ELECTRON_MIRROR=https://registry.npmmirror.com/-/binary/electron/ electron-builder --win zip --x64",
+    "dist:mac": "npm run electron:build && electron-builder --mac dmg -c.electronDist=./node_modules/electron/dist"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",
@@ -25,10 +36,61 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^8.57.1",
     "eslint-config-next": "15.0.3",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "cn.zhike.ai",
+    "productName": "智课",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "public/demo-assets"
+    },
+    "files": [
+      "dist-electron/**/*",
+      ".next/**/*",
+      "app/**/*",
+      "components/**/*",
+      "data/**/*",
+      "demoData/**/*",
+      "lib/**/*",
+      "public/**/*",
+      "package.json",
+      "next.config.ts",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/demo-data",
+        "to": "demo-data"
+      },
+      {
+        "from": "public/demo-assets",
+        "to": "demo-assets"
+      }
+    ],
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "artifactName": "智课-${version}-win-${arch}.${ext}",
+      "target": [
+        "zip"
+      ]
+    },
+    "mac": {
+      "artifactName": "智课-${version}-mac-${arch}.${ext}",
+      "target": [
+        "dmg"
+      ]
+    }
   }
 }

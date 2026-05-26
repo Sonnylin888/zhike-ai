@@ -1,0 +1,12 @@
+{
+  "name": "智课离线演示资源",
+  "version": "1.4.0",
+  "assets": [
+    "logo",
+    "classroom-background",
+    "slide-visuals",
+    "demo-map-placeholder",
+    "demo-fonts"
+  ],
+  "note": "首版使用内置 Unsplash 课堂图和前端 Demo 数据兜底，manifest 用于启动自检。"
+}
