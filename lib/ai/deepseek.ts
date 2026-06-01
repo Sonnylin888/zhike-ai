@@ -9,24 +9,12 @@ export type DeepSeekRequestStatus = {
   statusCode?: number;
 };
 
-type DeepSeekJsonRequest<T> = {
-  systemPrompt?: string;
-  userPrompt: string;
-  fallback: () => T;
-  isValid?: (data: T) => boolean;
-};
-
 type DeepSeekTextRequest = {
   systemPrompt?: string;
   userPrompt: string;
   fallback: string;
-};
-
-export type DeepSeekJsonResult<T> = {
-  data: T;
-  source: "ai" | "demo-fallback" | "ai-fallback";
-  message: string;
-  status: DeepSeekRequestStatus;
+  jsonMode?: boolean;
+  maxTokens?: number;
 };
 
 export type DeepSeekTextResult = {
@@ -62,14 +50,6 @@ export function getLatestDeepSeekRequestStatus() {
   return latestRequestStatus;
 }
 
-function extractJson(content: string) {
-  return content
-    .replace(/^```json/i, "")
-    .replace(/^```/, "")
-    .replace(/```$/, "")
-    .trim();
-}
-
 function getHttpErrorMessage(status: number) {
   if (status === 401) return "DeepSeek API Key 错误，已使用 Demo 内容继续演示。";
   if (status === 402) return "DeepSeek 余额不足，已使用 Demo 内容继续演示。";
@@ -80,10 +60,6 @@ function getHttpErrorMessage(status: number) {
 function getRequestErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
     return "DeepSeek 请求超时，已使用 Demo 内容继续演示。";
-  }
-
-  if (error instanceof SyntaxError) {
-    return "DeepSeek 返回内容解析失败，已使用 Demo 内容继续演示。";
   }
 
   if (error instanceof TypeError) {
@@ -100,11 +76,13 @@ function getRequestErrorMessage(error: unknown) {
 async function requestDeepSeekContent({
   systemPrompt,
   userPrompt,
-  jsonMode
+  jsonMode,
+  maxTokens
 }: {
   systemPrompt: string;
   userPrompt: string;
   jsonMode: boolean;
+  maxTokens?: number;
 }) {
   const config = getDeepSeekConfig();
   if (!config.apiKey) {
@@ -130,7 +108,7 @@ async function requestDeepSeekContent({
         thinking: { type: "disabled" },
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         temperature: 0.35,
-        max_tokens: jsonMode ? 2600 : 120,
+        max_tokens: maxTokens || (jsonMode ? 6000 : 120),
         stream: false
       }),
       signal: controller.signal
@@ -172,7 +150,9 @@ async function requestDeepSeekContent({
 export async function generateDeepSeekText({
   systemPrompt = "你是智课 AI，专注为老师生成可直接上课使用的教学内容。",
   userPrompt,
-  fallback
+  fallback,
+  jsonMode = false,
+  maxTokens
 }: DeepSeekTextRequest): Promise<DeepSeekTextResult> {
   const config = getDeepSeekConfig();
 
@@ -188,7 +168,7 @@ export async function generateDeepSeekText({
   }
 
   try {
-    const content = await requestDeepSeekContent({ systemPrompt, userPrompt, jsonMode: false });
+    const content = await requestDeepSeekContent({ systemPrompt, userPrompt, jsonMode, maxTokens });
     const message = "DeepSeek V4 Flash 请求成功。";
     return {
       content,
@@ -205,62 +185,6 @@ export async function generateDeepSeekText({
       message,
       status: setLatestRequestStatus("error", message),
       model: config.model
-    };
-  }
-}
-
-export async function generateDeepSeekJson<T>({
-  systemPrompt = "你是智课 AI，专注为老师生成严谨、实用的教学内容。你只输出可解析 JSON。",
-  userPrompt,
-  fallback,
-  isValid
-}: DeepSeekJsonRequest<T>): Promise<DeepSeekJsonResult<T>> {
-  const config = getDeepSeekConfig();
-
-  if (!config.apiKey) {
-    const message = "未配置 DeepSeek API Key，已使用 Demo 内容继续演示。";
-    return {
-      data: fallback(),
-      source: "demo-fallback",
-      message,
-      status: setLatestRequestStatus("mock", message)
-    };
-  }
-
-  try {
-    const content = await requestDeepSeekContent({
-      systemPrompt,
-      userPrompt,
-      jsonMode: true
-    });
-
-    const data = JSON.parse(extractJson(content)) as T;
-    if (isValid && !isValid(data)) {
-      const message = "DeepSeek 返回结构不完整，已使用 Demo 内容继续演示。";
-      return {
-        data: fallback(),
-        source: "ai-fallback",
-        message,
-        status: setLatestRequestStatus("error", message)
-      };
-    }
-
-    const message = "DeepSeek V4 Flash 请求成功。";
-    return {
-      data,
-      source: "ai",
-      message,
-      status: setLatestRequestStatus("success", message)
-    };
-  } catch (error) {
-    const message = getRequestErrorMessage(error);
-    console.error("DeepSeek generation failed, using demo fallback:", error);
-
-    return {
-      data: fallback(),
-      source: "ai-fallback",
-      message,
-      status: setLatestRequestStatus("error", message)
     };
   }
 }

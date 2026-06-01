@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateDeepSeekJson, generateDeepSeekText } from "@/lib/ai/deepseek";
+import { generateDeepSeekText } from "@/lib/ai/deepseek";
 import { getDeepSeekConfig } from "@/lib/ai/config";
 import { buildTeachingPrompt, getDemoTeachingPlan, type TeachingPlan } from "@/lib/prompt";
 import { findTextbookContent, type TeacherInput } from "@/lib/textbook";
@@ -30,6 +30,137 @@ function hasRenderableSlides(plan: Partial<TeachingPlan>) {
       firstSlide.questionGuide &&
       firstSlide.quiz
   );
+}
+
+type ParsedContent = Record<string, unknown>;
+type ParseMode = "json" | "extracted_json" | "text_fallback";
+
+function isParsedObject(value: unknown): value is ParsedContent {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function createTextFallback(content: string): ParsedContent {
+  return {
+    title: "AI 课堂包",
+    lessonPlan: content,
+    pptOutline: [],
+    questions: [],
+    activities: [],
+    homework: [],
+    blackboard: "",
+    review: ""
+  };
+}
+
+function stripMarkdownJsonFence(content: string) {
+  return content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function safeParseDeepSeekContent(content: string): {
+  content: ParsedContent;
+  parseMode: ParseMode;
+} {
+  if (!content.trim()) {
+    throw new Error("DeepSeek 未返回内容。");
+  }
+
+  const cleaned = stripMarkdownJsonFence(content);
+
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    if (isParsedObject(parsed)) {
+      return { content: parsed, parseMode: "json" };
+    }
+  } catch {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      try {
+        const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as unknown;
+        if (!isParsedObject(parsed)) throw new Error("JSON result is not an object");
+        return {
+          content: parsed,
+          parseMode: "extracted_json"
+        };
+      } catch {
+        // The text wrapper below keeps a successful AI response usable.
+      }
+    }
+  }
+
+  return {
+    content: createTextFallback(cleaned),
+    parseMode: "text_fallback"
+  };
+}
+
+function toStringArray(value: unknown, fallback: string[] = []) {
+  if (Array.isArray(value)) {
+    return value.map(String).map((item) => item.trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/\r?\n/)
+      .map((item) => item.replace(/^\s*(?:[-*]|\d+[.)、])\s*/, "").trim())
+      .filter(Boolean);
+  }
+  return fallback;
+}
+
+function wrapOnlineContentAsTeachingPlan(
+  parsed: ParsedContent,
+  rawContent: string,
+  input: TeacherInput
+): TeachingPlan {
+  if (hasRenderableSlides(parsed as Partial<TeachingPlan>)) {
+    return parsed as TeachingPlan;
+  }
+
+  const demo = getDemoTeachingPlan(input);
+  const lessonPlan = toStringArray(parsed.lessonPlan, [rawContent.trim()]);
+  const pptOutline = toStringArray(parsed.pptOutline, demo.pptOutline);
+  const interactionQuestions = toStringArray(
+    parsed.interactionQuestions || parsed.questions,
+    demo.interactionQuestions
+  );
+  const homework = toStringArray(parsed.homework, demo.homework);
+  const boardWriting = toStringArray(parsed.blackboard, demo.slides[0].boardWriting);
+  const title = typeof parsed.title === "string" && parsed.title.trim()
+    ? parsed.title.trim()
+    : `${input.topic} AI 课堂包`;
+  const summary = lessonPlan.join("；").slice(0, 360) || rawContent.trim().slice(0, 360);
+
+  return {
+    ...demo,
+    lessonPlan,
+    pptOutline,
+    interactionQuestions,
+    homework,
+    slides: [
+      {
+        ...demo.slides[0],
+        title,
+        content: lessonPlan.slice(0, 4),
+        teacherNote: summary,
+        boardWriting,
+        speakerScript: {
+          ...demo.slides[0].speakerScript,
+          explanation: summary.slice(0, 180)
+        },
+        speakerAssistant: {
+          ...demo.slides[0].speakerAssistant,
+          talkScript: summary.slice(0, 180),
+          keyPoints: lessonPlan.slice(0, 3)
+        }
+      },
+      ...demo.slides.slice(1)
+    ]
+  };
 }
 
 export async function POST(request: Request) {
@@ -63,22 +194,50 @@ export async function POST(request: Request) {
 
     const textbook = findTextbookContent(input);
     const prompt = buildTeachingPrompt(input, textbook);
-    const result = await generateDeepSeekJson<TeachingPlan>({
-      systemPrompt: "你是智课 AI，专注为老师生成严谨、实用的教学内容。你只输出可解析 JSON。",
+    const result = await generateDeepSeekText({
+      systemPrompt: `你是智课 AI，专注为老师生成可直接上课使用的教学内容。
+你必须只返回合法 JSON。
+不要返回 Markdown。
+不要返回 \`\`\`json 代码块。
+不要返回解释文字。
+JSON 必须完整且可被 JSON.parse 解析。
+输出结构必须严格遵循用户提示中的 JSON 格式。`,
       userPrompt: prompt,
-      fallback: () => getDemoTeachingPlan(input),
-      isValid: hasRenderableSlides
+      fallback: "",
+      jsonMode: true,
+      maxTokens: 6000
     });
+    const config = getDeepSeekConfig();
+
+    if (result.source !== "ai") {
+      const demo = getDemoTeachingPlan(input);
+      return NextResponse.json({
+        ok: false,
+        mode: "demo",
+        plan: demo,
+        content: demo,
+        source: result.source,
+        message: result.message,
+        error: result.message,
+        model: config.model,
+        aiStatus: result.status,
+        textbook
+      });
+    }
+
+    const parsed = safeParseDeepSeekContent(result.content);
+    const plan = wrapOnlineContentAsTeachingPlan(parsed.content, result.content, input);
 
     return NextResponse.json({
-      ok: result.source === "ai",
-      mode: result.source === "ai" ? "online" : "demo",
-      plan: result.data,
-      content: result.data,
-      source: result.source,
+      ok: true,
+      mode: "online",
+      plan,
+      content: parsed.content,
+      rawContent: result.content,
+      parseMode: parsed.parseMode,
+      source: "ai",
       message: result.message,
-      error: result.source === "ai" ? undefined : result.message,
-      model: getDeepSeekConfig().model,
+      model: config.model,
       aiStatus: result.status,
       textbook
     });
