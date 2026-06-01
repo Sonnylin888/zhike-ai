@@ -116,6 +116,7 @@ fallback 提示：
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_TIMEOUT_MS=25000
 ```
 
 AI 请求由服务端 `/api/generate` 发起：
