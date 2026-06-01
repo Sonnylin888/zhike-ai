@@ -237,6 +237,7 @@ export function InputForm() {
   const [copied, setCopied] = useState(false);
   const [source, setSource] = useState("");
   const [usageLimitReached, setUsageLimitReached] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
 
   const canCopy = useMemo(() => Boolean(plan), [plan]);
   const paceSummary = useMemo(
@@ -322,6 +323,7 @@ export function InputForm() {
     setError("");
     setCopied(false);
     setUsageLimitReached(false);
+    setActionMessage("正在生成课堂包，请稍候。");
 
     try {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -366,6 +368,11 @@ export function InputForm() {
       setPresentationIndex(0);
       setResultViewMode("teacher");
       setSource(data.source || "");
+      setActionMessage(
+        data.source === "ai"
+          ? `已通过 ${data.model || "DeepSeek"} 生成课堂包。`
+          : "AI 暂时不可用，已加载可继续演示的 Demo 课堂包。"
+      );
       if (data.source === "ai-fallback" || data.source === "demo-fallback") {
         setError(data.message || "当前 AI 服务不可用，已切换至 Demo 模式。");
       }
@@ -379,6 +386,7 @@ export function InputForm() {
 
       if (isUsageOrLoginError) {
         setError(message);
+        setActionMessage("AI 生成暂未开始，Demo 课堂仍可直接查看。");
         await logWarn("AI generation blocked", { message });
       } else {
         setPlan(getAgencyDemoPlan("climate-change"));
@@ -386,6 +394,7 @@ export function InputForm() {
         setResultViewMode("teacher");
         setSource("fixed-demo");
         setError(`${aiFallbackMessage} ${message}`);
+        setActionMessage("已自动加载固定 Demo 课堂包。");
         await logError("AI generation failed, fallback demo loaded", { message });
       }
     } finally {
@@ -425,6 +434,7 @@ export function InputForm() {
     setSource("fixed-demo");
     setError("");
     setUsageLimitReached(false);
+    setActionMessage(`已加载「${topicTitleMap[demoCaseId] || "气候变化"}」Demo 课堂包。`);
     await logInfo("Fixed demo classroom loaded", { demoCaseId });
 
     if (autoPresent) {
@@ -435,9 +445,14 @@ export function InputForm() {
 
   async function copyAll() {
     if (!plan) return;
-    await navigator.clipboard.writeText(planToText(plan));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    try {
+      await navigator.clipboard.writeText(planToText(plan));
+      setCopied(true);
+      setActionMessage("课堂包内容已复制。");
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setActionMessage("复制失败，请检查浏览器剪贴板权限。");
+    }
   }
 
   async function startPresentation() {
@@ -559,6 +574,7 @@ export function InputForm() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Button
+                type="button"
                 onClick={generatePlan}
                 disabled={loading}
                 className="bg-cyan-600 shadow-[0_14px_35px_rgba(8,145,178,0.28)] hover:bg-cyan-700"
@@ -625,6 +641,11 @@ export function InputForm() {
                   </a>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+          {actionMessage ? (
+            <div className="mt-4 rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800">
+              {actionMessage}
             </div>
           ) : null}
         </CardContent>

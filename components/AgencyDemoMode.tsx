@@ -25,6 +25,7 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState(agencyDemoCases[0].id);
 
   const selectedCase = useMemo(
@@ -60,10 +61,14 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
       role: account.role,
       loginAt: new Date().toISOString()
     };
-    writeAgencySession(nextSession);
+    if (!writeAgencySession(nextSession)) {
+      setLoginError("浏览器无法保存登录状态，请检查隐私模式或站点存储权限。");
+      return;
+    }
     readDailyUsage(nextSession.userId);
     setPassword("");
     setLoginError("");
+    setActionMessage(`已登录 ${nextSession.userId}，Demo Classroom 已就绪。`);
     window.setTimeout(() => {
       document.getElementById("demo-classroom")?.scrollIntoView({ behavior: "smooth" });
     }, 80);
@@ -71,10 +76,16 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
 
   function logout() {
     clearAgencySession();
+    setActionMessage("已退出代理商测试账号。");
   }
 
   function startDemo(autoPresent = false) {
     onSelectDemo?.(selectedCase.id, autoPresent);
+    setActionMessage(
+      autoPresent
+        ? `正在打开「${selectedCase.title}」全屏课堂演示。`
+        : `已加载「${selectedCase.title}」Demo 课堂包。`
+    );
     window.setTimeout(() => {
       document.getElementById("classroom-workbench")?.scrollIntoView({ behavior: "smooth" });
     }, 80);
@@ -207,6 +218,11 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
             <p className="mt-4 text-sm leading-6 text-cyan-50/72">
               当前选择：{selectedCase.title}。固定 Demo 不扣 AI 次数，适合代理商快速看效果。
             </p>
+            {actionMessage ? (
+              <p className="mt-3 rounded-md border border-cyan-200/20 bg-cyan-200/10 px-3 py-2 text-sm font-semibold text-cyan-50">
+                {actionMessage}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

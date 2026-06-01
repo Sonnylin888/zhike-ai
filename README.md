@@ -126,7 +126,7 @@ model=deepseek-v4-flash
 thinking.type=disabled
 ```
 
-旧部署中的 `DEEPSEEK_KEY`、`AI_API_KEY` 和 `OPENAI_API_KEY` 仍可兼容读取，但新部署应统一使用 `DEEPSEEK_API_KEY`。没有配置 API Key 时，系统会使用内置 Demo fallback。
+服务端统一读取 `DEEPSEEK_API_KEY`。没有配置 API Key 时，系统会使用内置 Demo fallback。
 
 ## 本地开发
 

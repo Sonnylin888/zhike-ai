@@ -16,11 +16,25 @@ type DeepSeekJsonRequest<T> = {
   isValid?: (data: T) => boolean;
 };
 
+type DeepSeekTextRequest = {
+  systemPrompt?: string;
+  userPrompt: string;
+  fallback: string;
+};
+
 export type DeepSeekJsonResult<T> = {
   data: T;
   source: "ai" | "demo-fallback" | "ai-fallback";
   message: string;
   status: DeepSeekRequestStatus;
+};
+
+export type DeepSeekTextResult = {
+  content: string;
+  source: "ai" | "demo-fallback" | "ai-fallback";
+  message: string;
+  status: DeepSeekRequestStatus;
+  model: string;
 };
 
 let latestRequestStatus: DeepSeekRequestStatus = {
@@ -83,22 +97,18 @@ function getRequestErrorMessage(error: unknown) {
   return "DeepSeek 连接失败，已使用 Demo 内容继续演示。";
 }
 
-export async function generateDeepSeekJson<T>({
-  systemPrompt = "你是智课 AI，专注为老师生成严谨、实用的教学内容。你只输出可解析 JSON。",
+async function requestDeepSeekContent({
+  systemPrompt,
   userPrompt,
-  fallback,
-  isValid
-}: DeepSeekJsonRequest<T>): Promise<DeepSeekJsonResult<T>> {
+  jsonMode
+}: {
+  systemPrompt: string;
+  userPrompt: string;
+  jsonMode: boolean;
+}) {
   const config = getDeepSeekConfig();
-
   if (!config.apiKey) {
-    const message = "未配置 DeepSeek API Key，已使用 Demo 内容继续演示。";
-    return {
-      data: fallback(),
-      source: "demo-fallback",
-      message,
-      status: setLatestRequestStatus("mock", message)
-    };
+    throw new Error("DEEPSEEK_API_KEY missing");
   }
 
   const controller = new AbortController();
@@ -118,36 +128,111 @@ export async function generateDeepSeekJson<T>({
           { role: "user", content: userPrompt }
         ],
         thinking: { type: "disabled" },
-        response_format: { type: "json_object" },
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
         temperature: 0.35,
-        max_tokens: 2600,
+        max_tokens: jsonMode ? 2600 : 120,
         stream: false
       }),
       signal: controller.signal
     });
+    const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const message = getHttpErrorMessage(response.status);
-      return {
-        data: fallback(),
-        source: "ai-fallback",
-        message,
-        status: setLatestRequestStatus("error", message, response.status)
-      };
+      console.error("DeepSeek HTTP error", {
+        status: response.status,
+        responseError: payload?.error?.message || payload?.error || "unknown",
+        model: config.model,
+        baseUrl: config.baseUrl,
+        hasApiKey: Boolean(config.apiKey),
+        apiKeyPrefix: config.apiKey.slice(0, 6)
+      });
+      throw new Error(getHttpErrorMessage(response.status));
     }
 
-    const payload = await response.json();
     const content = payload?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      const message = "DeepSeek 未返回内容，已使用 Demo 内容继续演示。";
-      return {
-        data: fallback(),
-        source: "ai-fallback",
-        message,
-        status: setLatestRequestStatus("error", message)
-      };
+    if (!content || typeof content !== "string") {
+      throw new Error("DeepSeek 未返回内容，已使用 Demo 内容继续演示。");
     }
+
+    return content;
+  } catch (error) {
+    console.error("DeepSeek request failed", {
+      error: error instanceof Error ? error.message : "unknown",
+      model: config.model,
+      baseUrl: config.baseUrl,
+      hasApiKey: Boolean(config.apiKey),
+      apiKeyPrefix: config.apiKey.slice(0, 6)
+    });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function generateDeepSeekText({
+  systemPrompt = "你是智课 AI，专注为老师生成可直接上课使用的教学内容。",
+  userPrompt,
+  fallback
+}: DeepSeekTextRequest): Promise<DeepSeekTextResult> {
+  const config = getDeepSeekConfig();
+
+  if (!config.apiKey) {
+    const message = "DEEPSEEK_API_KEY missing";
+    return {
+      content: fallback,
+      source: "demo-fallback",
+      message,
+      status: setLatestRequestStatus("mock", message),
+      model: config.model
+    };
+  }
+
+  try {
+    const content = await requestDeepSeekContent({ systemPrompt, userPrompt, jsonMode: false });
+    const message = "DeepSeek V4 Flash 请求成功。";
+    return {
+      content,
+      source: "ai",
+      message,
+      status: setLatestRequestStatus("success", message),
+      model: config.model
+    };
+  } catch (error) {
+    const message = getRequestErrorMessage(error);
+    return {
+      content: fallback,
+      source: "ai-fallback",
+      message,
+      status: setLatestRequestStatus("error", message),
+      model: config.model
+    };
+  }
+}
+
+export async function generateDeepSeekJson<T>({
+  systemPrompt = "你是智课 AI，专注为老师生成严谨、实用的教学内容。你只输出可解析 JSON。",
+  userPrompt,
+  fallback,
+  isValid
+}: DeepSeekJsonRequest<T>): Promise<DeepSeekJsonResult<T>> {
+  const config = getDeepSeekConfig();
+
+  if (!config.apiKey) {
+    const message = "未配置 DeepSeek API Key，已使用 Demo 内容继续演示。";
+    return {
+      data: fallback(),
+      source: "demo-fallback",
+      message,
+      status: setLatestRequestStatus("mock", message)
+    };
+  }
+
+  try {
+    const content = await requestDeepSeekContent({
+      systemPrompt,
+      userPrompt,
+      jsonMode: true
+    });
 
     const data = JSON.parse(extractJson(content)) as T;
     if (isValid && !isValid(data)) {
@@ -177,7 +262,5 @@ export async function generateDeepSeekJson<T>({
       message,
       status: setLatestRequestStatus("error", message)
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }

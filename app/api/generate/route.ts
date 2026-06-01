@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateDeepSeekJson } from "@/lib/ai/deepseek";
+import { generateDeepSeekJson, generateDeepSeekText } from "@/lib/ai/deepseek";
+import { getDeepSeekConfig } from "@/lib/ai/config";
 import { buildTeachingPrompt, getDemoTeachingPlan, type TeachingPlan } from "@/lib/prompt";
 import { findTextbookContent, type TeacherInput } from "@/lib/textbook";
 
@@ -33,7 +34,25 @@ function hasRenderableSlides(plan: Partial<TeachingPlan>) {
 
 export async function POST(request: Request) {
   try {
-    const input = (await request.json()) as TeacherInput;
+    const body = await request.json();
+
+    if (body.type === "connection-test") {
+      const result = await generateDeepSeekText({
+        userPrompt: body.prompt || "请回复：DeepSeek connected",
+        fallback: "当前 AI 服务不可用，已切换至 Demo 模式。"
+      });
+
+      return NextResponse.json({
+        ok: result.source === "ai",
+        mode: result.source === "ai" ? "online" : "demo",
+        content: result.content,
+        model: result.model,
+        error: result.source === "ai" ? undefined : result.message,
+        aiStatus: result.status
+      });
+    }
+
+    const input = body as TeacherInput;
 
     if (!isValidInput(input)) {
       return NextResponse.json(
@@ -52,9 +71,14 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
+      ok: result.source === "ai",
+      mode: result.source === "ai" ? "online" : "demo",
       plan: result.data,
+      content: result.data,
       source: result.source,
       message: result.message,
+      error: result.source === "ai" ? undefined : result.message,
+      model: getDeepSeekConfig().model,
       aiStatus: result.status,
       textbook
     });

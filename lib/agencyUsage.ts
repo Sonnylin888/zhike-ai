@@ -53,29 +53,52 @@ export function validateAgencyLogin(userId: string, password: string) {
 
 export function readAgencySession(): AgencySession | null {
   if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem(agencySessionStorageKey);
-  return stored ? (JSON.parse(stored) as AgencySession) : null;
+  try {
+    const stored = window.localStorage.getItem(agencySessionStorageKey);
+    return stored ? (JSON.parse(stored) as AgencySession) : null;
+  } catch {
+    window.localStorage.removeItem(agencySessionStorageKey);
+    return null;
+  }
 }
 
 export function writeAgencySession(session: AgencySession) {
-  window.localStorage.setItem(agencySessionStorageKey, JSON.stringify(session));
-  window.dispatchEvent(new Event(agencyUsageChangedEvent));
+  try {
+    window.localStorage.setItem(agencySessionStorageKey, JSON.stringify(session));
+    window.dispatchEvent(new Event(agencyUsageChangedEvent));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearAgencySession() {
-  window.localStorage.removeItem(agencySessionStorageKey);
+  try {
+    window.localStorage.removeItem(agencySessionStorageKey);
+  } catch {
+    // The UI can still return to its logged-out state when browser storage is blocked.
+  }
   window.dispatchEvent(new Event(agencyUsageChangedEvent));
 }
 
 function readUsageMap(): Record<string, DailyUsage> {
   if (typeof window === "undefined") return {};
-  const stored = window.localStorage.getItem(agencyUsageStorageKey);
-  return stored ? (JSON.parse(stored) as Record<string, DailyUsage>) : {};
+  try {
+    const stored = window.localStorage.getItem(agencyUsageStorageKey);
+    return stored ? (JSON.parse(stored) as Record<string, DailyUsage>) : {};
+  } catch {
+    window.localStorage.removeItem(agencyUsageStorageKey);
+    return {};
+  }
 }
 
 function writeUsageMap(usageMap: Record<string, DailyUsage>) {
-  window.localStorage.setItem(agencyUsageStorageKey, JSON.stringify(usageMap));
-  window.dispatchEvent(new Event(agencyUsageChangedEvent));
+  try {
+    window.localStorage.setItem(agencyUsageStorageKey, JSON.stringify(usageMap));
+    window.dispatchEvent(new Event(agencyUsageChangedEvent));
+  } catch {
+    // Daily limits fall back to the in-memory result when browser storage is unavailable.
+  }
 }
 
 export function readDailyUsage(userId: string): DailyUsage {

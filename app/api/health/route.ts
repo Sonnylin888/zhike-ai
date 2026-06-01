@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const config = getDeepSeekConfig();
   const latestRequest = getLatestDeepSeekRequestStatus();
+  const hasApiKey = config.apiKeyConfigured;
   const connectionStatus =
     latestRequest.state === "success"
       ? "可用"
@@ -15,12 +16,13 @@ export async function GET() {
         : "未配置";
 
   return NextResponse.json({
-    ok: true,
-    aiConfigured: config.apiKeyConfigured,
+    ok: hasApiKey,
     provider: "deepseek",
     model: config.model,
-    baseURL: config.baseURL,
-    mockMode: config.mockMode || latestRequest.state === "mock" || latestRequest.state === "error",
+    hasApiKey,
+    baseUrl: config.baseUrl,
+    mode: hasApiKey ? "online" : "demo",
+    reason: hasApiKey ? undefined : "DEEPSEEK_API_KEY missing",
     connectionStatus,
     latestRequest
   });

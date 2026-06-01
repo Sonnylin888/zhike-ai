@@ -44,7 +44,7 @@ export function HeroSection() {
               asChild
               className="bg-cyan-300 text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.32)] hover:bg-cyan-200"
             >
-              <a href="#classroom-workbench">
+              <a href="#agency-demo-mode">
                 <MonitorPlay className="h-4 w-4" />
                 进入 Demo Classroom
               </a>

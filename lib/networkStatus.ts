@@ -22,7 +22,7 @@ export async function detectNetworkStatus(): Promise<NetworkStatus> {
     const response = await fetch("/api/health", { cache: "no-store" });
     const data = await response.json();
 
-    if (!response.ok || !data.aiConfigured) {
+    if (!data.hasApiKey || data.mode === "demo") {
       return {
         online: true,
         aiAvailable: false,
