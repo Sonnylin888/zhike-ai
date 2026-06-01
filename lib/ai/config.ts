@@ -5,7 +5,7 @@ import path from "node:path";
 
 export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 export const DEEPSEEK_MODEL = "deepseek-v4-flash";
-export const DEEPSEEK_TIMEOUT_MS = 25000;
+export const DEEPSEEK_TIMEOUT_MS = 60000;
 
 export type DeepSeekConfig = {
   apiKey: string | null;

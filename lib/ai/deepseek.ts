@@ -147,76 +147,68 @@ async function requestDeepSeekOnce({
   const config = getDeepSeekConfig();
   if (!config.apiKey) throw new Error("DEEPSEEK_API_KEY missing");
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ]
+    })
+  });
+  const text = await response.text();
+  console.log("RAW_TEXT_START", text.slice(0, 5000), "RAW_TEXT_END");
 
+  let payload: unknown;
   try {
-    const response = await fetch(config.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ]
-      }),
-      signal: controller.signal
-    });
-    const text = await response.text();
-    console.log("RAW_TEXT_START", text.slice(0, 5000), "RAW_TEXT_END");
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(text);
-    } catch (error) {
-      console.error("JSON_PARSE_ERROR", error);
-      throw error;
-    }
-
-    console.log(
-      "RAW_PAYLOAD_START",
-      JSON.stringify(payload, null, 2).slice(0, 5000),
-      "RAW_PAYLOAD_END"
-    );
-
-    const data = payload && typeof payload === "object" ? payload as Record<string, any> : {};
-
-    if (!response.ok || data.error) {
-      const errorMessage =
-        data.error?.message || data.message || stringifyError(data.error) || "unknown error";
-      console.error("DeepSeek HTTP error", {
-        status: response.status,
-        statusText: response.statusText,
-        payload,
-        responseError: errorMessage,
-        model,
-        baseUrl: config.baseUrl,
-        hasApiKey: Boolean(config.apiKey),
-        apiKeyPrefix: config.apiKey.slice(0, 6)
-      });
-      throw new Error(`DeepSeek HTTP ${response.status}: ${errorMessage}`);
-    }
-
-    const content = extractDeepSeekContent(payload);
-    if (!content) {
-      console.error("DeepSeek response content empty", {
-        model,
-        payloadKeys: Object.keys(data),
-        rawPayload: JSON.stringify(payload, null, 2).slice(0, 5000)
-      });
-    }
-
-    return {
-      content,
-      payloadKeys: Object.keys(data)
-    };
-  } finally {
-    clearTimeout(timeout);
+    payload = JSON.parse(text);
+  } catch (error) {
+    console.error("JSON_PARSE_ERROR", error);
+    throw error;
   }
+
+  console.log(
+    "RAW_PAYLOAD_START",
+    JSON.stringify(payload, null, 2).slice(0, 5000),
+    "RAW_PAYLOAD_END"
+  );
+
+  const data = payload && typeof payload === "object" ? payload as Record<string, any> : {};
+
+  if (!response.ok || data.error) {
+    const errorMessage =
+      data.error?.message || data.message || stringifyError(data.error) || "unknown error";
+    console.error("DeepSeek HTTP error", {
+      status: response.status,
+      statusText: response.statusText,
+      payload,
+      responseError: errorMessage,
+      model,
+      baseUrl: config.baseUrl,
+      hasApiKey: Boolean(config.apiKey),
+      apiKeyPrefix: config.apiKey.slice(0, 6)
+    });
+    throw new Error(`DeepSeek HTTP ${response.status}: ${errorMessage}`);
+  }
+
+  const content = extractDeepSeekContent(payload);
+  if (!content) {
+    console.error("DeepSeek response content empty", {
+      model,
+      payloadKeys: Object.keys(data),
+      rawPayload: JSON.stringify(payload, null, 2).slice(0, 5000)
+    });
+  }
+
+  return {
+    content,
+    payloadKeys: Object.keys(data)
+  };
 }
 
 async function requestDeepSeekContent({
