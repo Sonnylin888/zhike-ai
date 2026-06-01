@@ -27,6 +27,7 @@ import { AgencyDemoMode } from "@/components/AgencyDemoMode";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DemoHealthCheck } from "@/components/DemoHealthCheck";
+import { GeneratedContent } from "@/components/GeneratedContent";
 import { HomeworkPlanCard } from "@/components/HomeworkPlanCard";
 import { LessonTemplateGallery } from "@/components/LessonTemplateGallery";
 import { LessonWorkflowPanel } from "@/components/LessonWorkflowPanel";
@@ -44,6 +45,7 @@ import { TrialFeedback } from "@/components/TrialFeedback";
 import { TrialSummaryPage } from "@/components/TrialSummaryPage";
 import { getAgencyDemoPlan } from "@/demoData/agencyDemo";
 import { aiFallbackMessage } from "@/lib/aiFallback";
+import { normalizeClassroomPackage, type ClassroomPackage } from "@/lib/classroomPackage";
 import {
   consumeDailyUsage,
   readAgencySession
@@ -238,6 +240,8 @@ export function InputForm() {
   const [source, setSource] = useState("");
   const [usageLimitReached, setUsageLimitReached] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
+  const [classroomPackage, setClassroomPackage] = useState<ClassroomPackage | null>(null);
+  const [parseMode, setParseMode] = useState("");
 
   const canCopy = useMemo(() => Boolean(plan), [plan]);
   const paceSummary = useMemo(
@@ -328,6 +332,8 @@ export function InputForm() {
     try {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         setPlan(getAgencyDemoPlan("climate-change"));
+        setClassroomPackage(null);
+        setParseMode("");
         setPresentationIndex(0);
         setResultViewMode("teacher");
         setSource("fixed-demo");
@@ -365,6 +371,8 @@ export function InputForm() {
       }
 
       setPlan(data.plan);
+      setClassroomPackage(normalizeClassroomPackage(data));
+      setParseMode(data.parseMode || "");
       setPresentationIndex(0);
       setResultViewMode("teacher");
       setSource(data.source || "");
@@ -390,6 +398,8 @@ export function InputForm() {
         await logWarn("AI generation blocked", { message });
       } else {
         setPlan(getAgencyDemoPlan("climate-change"));
+        setClassroomPackage(null);
+        setParseMode("");
         setPresentationIndex(0);
         setResultViewMode("teacher");
         setSource("fixed-demo");
@@ -429,6 +439,8 @@ export function InputForm() {
       teachingStyle: topicMap[demoCaseId] || "探究型"
     });
     setPlan(fixedPlan);
+    setClassroomPackage(null);
+    setParseMode("");
     setPresentationIndex(0);
     setResultViewMode("teacher");
     setSource("fixed-demo");
@@ -684,6 +696,14 @@ export function InputForm() {
 
       {plan && !loading ? (
         <div className="space-y-5">
+          {source === "ai" && parseMode === "text_fallback" ? (
+            <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800">
+              AI 已生成内容，当前以文本课堂包形式展示。
+            </div>
+          ) : null}
+          {source === "ai" && classroomPackage ? (
+            <GeneratedContent classroomPackage={classroomPackage} />
+          ) : null}
           {source === "demo-fallback" || source === "ai-fallback" || source === "fixed-demo" ? (
             <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
               演示模板已就绪：固定 Demo 不扣 AI 次数，支持配图、互动与全屏演示。

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateDeepSeekText } from "@/lib/ai/deepseek";
 import { getDeepSeekConfig } from "@/lib/ai/config";
+import { normalizeClassroomPackage } from "@/lib/classroomPackage";
 import { buildTeachingPrompt, getDemoTeachingPlan, type TeachingPlan } from "@/lib/prompt";
 import { findTextbookContent, type TeacherInput } from "@/lib/textbook";
 
@@ -33,7 +34,7 @@ function hasRenderableSlides(plan: Partial<TeachingPlan>) {
 }
 
 type ParsedContent = Record<string, unknown>;
-type ParseMode = "json" | "extracted_json" | "text_fallback";
+type ParseMode = "json" | "text_fallback";
 
 function isParsedObject(value: unknown): value is ParsedContent {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -85,7 +86,7 @@ function safeParseDeepSeekContent(content: string): {
         if (!isParsedObject(parsed)) throw new Error("JSON result is not an object");
         return {
           content: parsed,
-          parseMode: "extracted_json"
+          parseMode: "json"
         };
       } catch {
         // The text wrapper below keeps a successful AI response usable.
@@ -196,6 +197,14 @@ export async function POST(request: Request) {
 
     const textbook = findTextbookContent(input);
     const prompt = buildTeachingPrompt(input, textbook);
+    const config = getDeepSeekConfig();
+    console.log("Generate request received", {
+      grade: input.grade,
+      subject: input.subject,
+      topic: input.topic,
+      style: input.teachingStyle,
+      model: config.model
+    });
     const result = await generateDeepSeekText({
       systemPrompt: `你是智课 AI，专注为老师生成可直接上课使用的教学内容。
 你必须只返回合法 JSON。
@@ -206,10 +215,9 @@ JSON 必须完整且可被 JSON.parse 解析。
 输出结构必须严格遵循用户提示中的 JSON 格式。`,
       userPrompt: prompt,
       fallback: "",
-      jsonMode: true,
+      jsonMode: false,
       maxTokens: 6000
     });
-    const config = getDeepSeekConfig();
 
     if (result.source !== "ai") {
       const demo = getDemoTeachingPlan(input);
@@ -230,13 +238,24 @@ JSON 必须完整且可被 JSON.parse 解析。
     }
 
     const parsed = safeParseDeepSeekContent(result.content);
+    const classroomPackage = normalizeClassroomPackage({
+      content: parsed.content,
+      rawContent: result.content
+    });
     const plan = wrapOnlineContentAsTeachingPlan(parsed.content, result.content, input);
+    console.log("Generate result", {
+      ok: true,
+      source: "ai",
+      parseMode: parsed.parseMode,
+      rawLength: result.content.length,
+      hasLessonPlan: Boolean(classroomPackage.lessonPlan)
+    });
 
     return NextResponse.json({
       ok: true,
       mode: "online",
       plan,
-      content: parsed.content,
+      content: classroomPackage,
       rawContent: result.content,
       parseMode: parsed.parseMode,
       source: "ai",
