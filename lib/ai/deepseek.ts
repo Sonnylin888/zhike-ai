@@ -122,7 +122,9 @@ export function extractDeepSeekContent(payload: unknown): string | null {
     choice?.text,
     data.output_text,
     data.output,
-    data.content
+    data.content,
+    data.message,
+    data.data
   ];
 
   for (const candidate of candidates) {
@@ -164,25 +166,32 @@ async function requestDeepSeekOnce({
       }),
       signal: controller.signal
     });
-    const payload = await response.json().catch(() => null);
-    const data = payload && typeof payload === "object" ? payload as Record<string, any> : {};
+    const text = await response.text();
+    console.log("RAW_TEXT_START", text.slice(0, 5000), "RAW_TEXT_END");
 
-    console.log("DeepSeek raw payload", JSON.stringify(payload, null, 2).slice(0, 3000));
-    console.log("DeepSeek raw response", {
-      status: response.status,
-      ok: response.ok,
-      model,
-      hasChoices: Array.isArray(data.choices),
-      choice0Keys: data.choices?.[0] ? Object.keys(data.choices[0]) : [],
-      messageKeys: data.choices?.[0]?.message ? Object.keys(data.choices[0].message) : [],
-      error: data.error
-    });
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch (error) {
+      console.error("JSON_PARSE_ERROR", error);
+      throw error;
+    }
+
+    console.log(
+      "RAW_PAYLOAD_START",
+      JSON.stringify(payload, null, 2).slice(0, 5000),
+      "RAW_PAYLOAD_END"
+    );
+
+    const data = payload && typeof payload === "object" ? payload as Record<string, any> : {};
 
     if (!response.ok || data.error) {
       const errorMessage =
         data.error?.message || data.message || stringifyError(data.error) || "unknown error";
       console.error("DeepSeek HTTP error", {
         status: response.status,
+        statusText: response.statusText,
+        payload,
         responseError: errorMessage,
         model,
         baseUrl: config.baseUrl,
@@ -197,7 +206,7 @@ async function requestDeepSeekOnce({
       console.error("DeepSeek response content empty", {
         model,
         payloadKeys: Object.keys(data),
-        rawPayload: JSON.stringify(payload, null, 2).slice(0, 3000)
+        rawPayload: JSON.stringify(payload, null, 2).slice(0, 5000)
       });
     }
 
