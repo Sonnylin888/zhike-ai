@@ -1,4 +1,5 @@
 import { AIUsageStatus } from "@/components/AIUsageStatus";
+import { AIStatusPanel } from "@/components/AIStatusPanel";
 import { AgencyPresentationMode } from "@/components/AgencyPresentationMode";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
 import { CooperationPage } from "@/components/CooperationPage";
@@ -18,6 +19,9 @@ export default function Home() {
       <WebFirstSection />
       <section className="mx-auto max-w-6xl px-4 pt-8 md:px-8">
         <StartupHealthCheck />
+        <div className="mt-4">
+          <AIStatusPanel />
+        </div>
       </section>
       <AgencyPresentationMode />
       <SchoolTrialMode />

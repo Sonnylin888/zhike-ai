@@ -367,7 +367,7 @@ export function InputForm() {
       setResultViewMode("teacher");
       setSource(data.source || "");
       if (data.source === "ai-fallback" || data.source === "demo-fallback") {
-        setError("当前 AI 服务不可用，已切换至 Demo 模式。");
+        setError(data.message || "当前 AI 服务不可用，已切换至 Demo 模式。");
       }
       await logInfo("AI classroom package generated", {
         source: data.source || "ai"

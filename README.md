@@ -102,24 +102,31 @@ fallback 提示：
 演示永不崩溃。
 ```
 
-## 环境变量
+## DeepSeek 配置
 
-DeepSeek API Key 只放在服务端环境变量中，不要使用 `NEXT_PUBLIC_DEEPSEEK_API_KEY`。
+智课统一使用 DeepSeek V4 Flash。DeepSeek API Key 只放在服务端环境变量中，不要使用 `NEXT_PUBLIC_DEEPSEEK_API_KEY`，也不要把真实 Key 上传到 GitHub。
+
+1. 在项目根目录创建 `.env.local`
+2. 填入 `DEEPSEEK_API_KEY`
+3. 运行 `npm run dev`
+4. 上线前运行 `npm run build`
+5. 腾讯云部署时，在云托管环境变量中配置同样的 Key
 
 ```bash
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
-也支持 OpenAI 兼容配置：
+AI 请求由服务端 `/api/generate` 发起：
 
 ```bash
-OPENAI_API_KEY=你的 OpenAI API Key
-OPENAI_MODEL=gpt-4o-mini
+POST https://api.deepseek.com/chat/completions
+model=deepseek-v4-flash
+thinking.type=disabled
 ```
 
-没有配置 API Key 时，系统会使用内置 Demo fallback。
+旧部署中的 `DEEPSEEK_KEY`、`AI_API_KEY` 和 `OPENAI_API_KEY` 仍可兼容读取，但新部署应统一使用 `DEEPSEEK_API_KEY`。没有配置 API Key 时，系统会使用内置 Demo fallback。
 
 ## 本地开发
 
@@ -235,7 +242,7 @@ zhike-prod
 ```bash
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 NEXT_PUBLIC_APP_NAME=智课
 NEXT_PUBLIC_APP_VERSION=2.0.0
 NEXT_PUBLIC_DEMO_MODE=true

@@ -1,5 +1,5 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { generateDeepSeekJson } from "@/lib/ai/deepseek";
 import { buildTeachingPrompt, getDemoTeachingPlan, type TeachingPlan } from "@/lib/prompt";
 import { findTextbookContent, type TeacherInput } from "@/lib/textbook";
 
@@ -12,14 +12,6 @@ function isValidInput(input: Partial<TeacherInput>) {
       input.topic?.trim() &&
       input.textbookVersion?.trim()
   );
-}
-
-function extractJson(content: string) {
-  return content
-    .replace(/^```json/i, "")
-    .replace(/^```/, "")
-    .replace(/```$/, "")
-    .trim();
 }
 
 function hasRenderableSlides(plan: Partial<TeachingPlan>) {
@@ -39,18 +31,6 @@ function hasRenderableSlides(plan: Partial<TeachingPlan>) {
   );
 }
 
-function demoFallbackResponse(
-  textbook: ReturnType<typeof findTextbookContent>,
-  input: TeacherInput,
-  source = "demo-fallback"
-) {
-  return NextResponse.json({
-    plan: getDemoTeachingPlan(input),
-    source,
-    textbook
-  });
-}
-
 export async function POST(request: Request) {
   try {
     const input = (await request.json()) as TeacherInput;
@@ -64,62 +44,20 @@ export async function POST(request: Request) {
 
     const textbook = findTextbookContent(input);
     const prompt = buildTeachingPrompt(input, textbook);
-    const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-    const deepseekApiKey = process.env.DEEPSEEK_API_KEY?.trim();
-    const isUsingOpenAI = Boolean(openaiApiKey);
-    const apiKey = openaiApiKey || deepseekApiKey;
-    const baseURL = isUsingOpenAI
-      ? process.env.OPENAI_BASE_URL?.trim()
-      : process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
-    const model = isUsingOpenAI
-      ? process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"
-      : process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
+    const result = await generateDeepSeekJson<TeachingPlan>({
+      systemPrompt: "你是智课 AI，专注为老师生成严谨、实用的教学内容。你只输出可解析 JSON。",
+      userPrompt: prompt,
+      fallback: () => getDemoTeachingPlan(input),
+      isValid: hasRenderableSlides
+    });
 
-    if (!apiKey) {
-      return demoFallbackResponse(textbook, input);
-    }
-
-    try {
-      const client = new OpenAI({
-        apiKey,
-        baseURL,
-        timeout: 25000
-      });
-
-      const completion = await client.chat.completions.create({
-        model,
-        temperature: 0.35,
-        max_tokens: 2600,
-        messages: [
-          {
-            role: "system",
-            content: "你是严谨、务实的一线教学设计专家。你只输出可解析 JSON。"
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" }
-      });
-
-      const content = completion.choices[0]?.message?.content;
-      if (!content) throw new Error("AI 未返回内容");
-
-      const plan = JSON.parse(extractJson(content)) as Partial<TeachingPlan>;
-      if (!hasRenderableSlides(plan)) {
-        throw new Error("AI 返回结构不完整");
-      }
-
-      return NextResponse.json({
-        plan: plan as TeachingPlan,
-        source: "ai",
-        textbook
-      });
-    } catch (aiError) {
-      console.error("AI generation failed, using demo fallback:", aiError);
-      return demoFallbackResponse(textbook, input, "ai-fallback");
-    }
+    return NextResponse.json({
+      plan: result.data,
+      source: result.source,
+      message: result.message,
+      aiStatus: result.status,
+      textbook
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
