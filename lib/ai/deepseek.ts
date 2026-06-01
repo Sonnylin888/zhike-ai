@@ -15,8 +15,6 @@ type DeepSeekTextRequest = {
   systemPrompt?: string;
   userPrompt: string;
   fallback: string;
-  jsonMode?: boolean;
-  maxTokens?: number;
 };
 
 export type DeepSeekTextResult = {
@@ -113,16 +111,17 @@ function normalizeContent(content: unknown): string | null {
 }
 
 export function extractDeepSeekContent(payload: unknown): string | null {
+  if (typeof payload === "string") return payload.trim() || null;
+  if (Array.isArray(payload)) return JSON.stringify(payload);
   if (!payload || typeof payload !== "object") return null;
   const data = payload as Record<string, any>;
   const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
   const candidates = [
     choice?.message?.content,
-    choice?.delta?.content,
+    choice?.message?.reasoning_content,
     choice?.text,
     data.output_text,
     data.output,
-    data.message?.content,
     data.content
   ];
 
@@ -137,14 +136,10 @@ export function extractDeepSeekContent(payload: unknown): string | null {
 async function requestDeepSeekOnce({
   systemPrompt,
   userPrompt,
-  jsonMode,
-  maxTokens,
   model
 }: {
   systemPrompt: string;
   userPrompt: string;
-  jsonMode: boolean;
-  maxTokens?: number;
   model: string;
 }) {
   const config = getDeepSeekConfig();
@@ -165,18 +160,14 @@ async function requestDeepSeekOnce({
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
-        ],
-        thinking: { type: "disabled" },
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-        temperature: 0.35,
-        max_tokens: maxTokens || (jsonMode ? 6000 : 120),
-        stream: false
+        ]
       }),
       signal: controller.signal
     });
     const payload = await response.json().catch(() => null);
     const data = payload && typeof payload === "object" ? payload as Record<string, any> : {};
 
+    console.log("DeepSeek raw payload", JSON.stringify(payload, null, 2).slice(0, 3000));
     console.log("DeepSeek raw response", {
       status: response.status,
       ok: response.ok,
@@ -187,7 +178,7 @@ async function requestDeepSeekOnce({
       error: data.error
     });
 
-    if (!response.ok) {
+    if (!response.ok || data.error) {
       const errorMessage =
         data.error?.message || data.message || stringifyError(data.error) || "unknown error";
       console.error("DeepSeek HTTP error", {
@@ -201,8 +192,17 @@ async function requestDeepSeekOnce({
       throw new Error(`DeepSeek HTTP ${response.status}: ${errorMessage}`);
     }
 
+    const content = extractDeepSeekContent(payload);
+    if (!content) {
+      console.error("DeepSeek response content empty", {
+        model,
+        payloadKeys: Object.keys(data),
+        rawPayload: JSON.stringify(payload, null, 2).slice(0, 3000)
+      });
+    }
+
     return {
-      content: extractDeepSeekContent(payload),
+      content,
       payloadKeys: Object.keys(data)
     };
   } finally {
@@ -212,14 +212,10 @@ async function requestDeepSeekOnce({
 
 async function requestDeepSeekContent({
   systemPrompt,
-  userPrompt,
-  jsonMode,
-  maxTokens
+  userPrompt
 }: {
   systemPrompt: string;
   userPrompt: string;
-  jsonMode: boolean;
-  maxTokens?: number;
 }) {
   const config = getDeepSeekConfig();
   if (!config.apiKey) {
@@ -230,8 +226,6 @@ async function requestDeepSeekContent({
     const primary = await requestDeepSeekOnce({
       systemPrompt,
       userPrompt,
-      jsonMode,
-      maxTokens,
       model: config.model
     });
     if (primary.content) {
@@ -247,8 +241,6 @@ async function requestDeepSeekContent({
       const fallback = await requestDeepSeekOnce({
         systemPrompt,
         userPrompt,
-        jsonMode,
-        maxTokens,
         model: "deepseek-chat"
       });
       if (fallback.content) {
@@ -273,9 +265,7 @@ async function requestDeepSeekContent({
 export async function generateDeepSeekText({
   systemPrompt = "你是智课 AI，专注为老师生成可直接上课使用的教学内容。",
   userPrompt,
-  fallback,
-  jsonMode = false,
-  maxTokens
+  fallback
 }: DeepSeekTextRequest): Promise<DeepSeekTextResult> {
   const config = getDeepSeekConfig();
 
@@ -293,7 +283,7 @@ export async function generateDeepSeekText({
   }
 
   try {
-    const result = await requestDeepSeekContent({ systemPrompt, userPrompt, jsonMode, maxTokens });
+    const result = await requestDeepSeekContent({ systemPrompt, userPrompt });
     const message = result.fallbackModelUsed
       ? "DeepSeek fallback 模型请求成功。"
       : "DeepSeek V4 Flash 请求成功。";

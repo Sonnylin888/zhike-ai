@@ -40,9 +40,9 @@ function isParsedObject(value: unknown): value is ParsedContent {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function createTextFallback(content: string): ParsedContent {
+function createTextFallback(content: string, input?: Pick<TeacherInput, "subject" | "topic">): ParsedContent {
   return {
-    title: "AI 课堂包",
+    title: input ? `${input.subject}《${input.topic}》AI课堂包` : "AI 课堂包",
     lessonPlan: content,
     pptOutline: [],
     questions: [],
@@ -61,7 +61,7 @@ function stripMarkdownJsonFence(content: string) {
     .trim();
 }
 
-function safeParseDeepSeekContent(content: string): {
+function safeParseDeepSeekContent(content: string, input?: Pick<TeacherInput, "subject" | "topic">): {
   content: ParsedContent;
   parseMode: ParseMode;
 } {
@@ -95,7 +95,7 @@ function safeParseDeepSeekContent(content: string): {
   }
 
   return {
-    content: createTextFallback(cleaned),
+    content: createTextFallback(cleaned, input),
     parseMode: "text_fallback"
   };
 }
@@ -214,9 +214,7 @@ export async function POST(request: Request) {
 JSON 必须完整且可被 JSON.parse 解析。
 输出结构必须严格遵循用户提示中的 JSON 格式。`,
       userPrompt: prompt,
-      fallback: "",
-      jsonMode: false,
-      maxTokens: 6000
+      fallback: ""
     });
 
     if (result.source !== "ai") {
@@ -237,7 +235,7 @@ JSON 必须完整且可被 JSON.parse 解析。
       });
     }
 
-    const parsed = safeParseDeepSeekContent(result.content);
+    const parsed = safeParseDeepSeekContent(result.content, input);
     const classroomPackage = normalizeClassroomPackage({
       content: parsed.content,
       rawContent: result.content
