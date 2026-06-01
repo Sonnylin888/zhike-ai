@@ -178,6 +178,8 @@ export async function POST(request: Request) {
         mode: result.source === "ai" ? "online" : "demo",
         content: result.content,
         model: result.model,
+        modelUsed: result.modelUsed,
+        fallbackModelUsed: result.fallbackModelUsed,
         error: result.source === "ai" ? undefined : result.message,
         aiStatus: result.status
       });
@@ -220,6 +222,8 @@ JSON 必须完整且可被 JSON.parse 解析。
         message: result.message,
         error: result.message,
         model: config.model,
+        modelUsed: result.modelUsed,
+        fallbackModelUsed: result.fallbackModelUsed,
         aiStatus: result.status,
         textbook
       });
@@ -238,6 +242,8 @@ JSON 必须完整且可被 JSON.parse 解析。
       source: "ai",
       message: result.message,
       model: config.model,
+      modelUsed: result.modelUsed,
+      fallbackModelUsed: result.fallbackModelUsed,
       aiStatus: result.status,
       textbook
     });
