@@ -1,0 +1,34 @@
+[
+  {
+    "id": "deepseek_default",
+    "provider": "deepseek",
+    "name": "DeepSeek 默认模型",
+    "baseUrl": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "enabled": true
+  },
+  {
+    "id": "mock_demo",
+    "provider": "mock",
+    "name": "Mock Demo",
+    "baseUrl": "",
+    "model": "demo-fallback",
+    "enabled": true
+  },
+  {
+    "id": "qwen_reserved",
+    "provider": "qwen",
+    "name": "Qwen 预留",
+    "baseUrl": "",
+    "model": "",
+    "enabled": false
+  },
+  {
+    "id": "gemini_reserved",
+    "provider": "gemini",
+    "name": "Gemini 预留",
+    "baseUrl": "",
+    "model": "",
+    "enabled": false
+  }
+]

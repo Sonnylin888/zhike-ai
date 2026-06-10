@@ -1,0 +1,54 @@
+[
+  {
+    "id": "user_admin",
+    "username": "admin",
+    "password": "admin123",
+    "role": "admin",
+    "displayName": "智课AI管理员",
+    "watermark": "智课AI管理后台",
+    "dailyLimit": 999,
+    "modelProvider": "deepseek",
+    "modelName": "deepseek-v4-flash",
+    "apiKeyId": "deepseek_default",
+    "enabled": true
+  },
+  {
+    "id": "user_hebei",
+    "username": "hebei",
+    "password": "123456",
+    "role": "agent",
+    "displayName": "河北经销商",
+    "watermark": "河北经销商演示版",
+    "dailyLimit": 50,
+    "modelProvider": "deepseek",
+    "modelName": "deepseek-v4-flash",
+    "apiKeyId": "deepseek_default",
+    "enabled": true
+  },
+  {
+    "id": "user_school",
+    "username": "school",
+    "password": "123456",
+    "role": "school",
+    "displayName": "学校试用账号",
+    "watermark": "学校试用版",
+    "dailyLimit": 20,
+    "modelProvider": "deepseek",
+    "modelName": "deepseek-v4-flash",
+    "apiKeyId": "deepseek_default",
+    "enabled": true
+  },
+  {
+    "id": "user_demo",
+    "username": "demo",
+    "password": "123456",
+    "role": "demo",
+    "displayName": "智课AI演示账号",
+    "watermark": "智课AI演示版",
+    "dailyLimit": 10,
+    "modelProvider": "deepseek",
+    "modelName": "deepseek-v4-flash",
+    "apiKeyId": "deepseek_default",
+    "enabled": true
+  }
+]

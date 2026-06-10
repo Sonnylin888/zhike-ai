@@ -35,6 +35,13 @@ function hasRenderableSlides(plan: Partial<TeachingPlan>) {
 
 type ParsedContent = Record<string, unknown>;
 type ParseMode = "json" | "text_fallback";
+type GenerateRequestBody = TeacherInput & {
+  userId?: string;
+  apiKeyId?: string;
+  modelProvider?: string;
+  modelName?: string;
+  watermark?: string;
+};
 
 function isParsedObject(value: unknown): value is ParsedContent {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -186,7 +193,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const input = body as TeacherInput;
+    const input = body as GenerateRequestBody;
 
     if (!isValidInput(input)) {
       return NextResponse.json(
@@ -203,7 +210,10 @@ export async function POST(request: Request) {
       subject: input.subject,
       topic: input.topic,
       style: input.teachingStyle,
-      model: config.model
+      model: input.modelName || config.model,
+      userId: input.userId,
+      apiKeyId: input.apiKeyId,
+      modelProvider: input.modelProvider
     });
     const result = await generateDeepSeekText({
       systemPrompt: `你是智课 AI，专注为老师生成可直接上课使用的教学内容。
@@ -228,6 +238,13 @@ JSON 必须完整且可被 JSON.parse 解析。
         message: result.message,
         error: result.message,
         model: config.model,
+        requester: {
+          userId: input.userId,
+          apiKeyId: input.apiKeyId,
+          modelProvider: input.modelProvider,
+          modelName: input.modelName,
+          watermark: input.watermark
+        },
         modelUsed: result.modelUsed,
         fallbackModelUsed: result.fallbackModelUsed,
         aiStatus: result.status,
@@ -259,6 +276,13 @@ JSON 必须完整且可被 JSON.parse 解析。
       source: "ai",
       message: result.message,
       model: config.model,
+      requester: {
+        userId: input.userId,
+        apiKeyId: input.apiKeyId,
+        modelProvider: input.modelProvider,
+        modelName: input.modelName,
+        watermark: input.watermark
+      },
       modelUsed: result.modelUsed,
       fallbackModelUsed: result.fallbackModelUsed,
       aiStatus: result.status,

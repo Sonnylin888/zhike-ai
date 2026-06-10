@@ -1,30 +1,18 @@
 "use client";
 
-import { LockKeyhole, LogOut, MonitorPlay, Sparkles, UserRoundCheck } from "lucide-react";
+import { MonitorPlay, Sparkles, UserRoundCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { agencyDemoCases } from "@/demoData/agencyDemo";
-import {
-  agencyUsageChangedEvent,
-  clearAgencySession,
-  readAgencySession,
-  readDailyUsage,
-  validateAgencyLogin,
-  writeAgencySession,
-  type AgencySession,
-  type DailyUsage
-} from "@/lib/agencyUsage";
+import { getCurrentUser, type ZhikeUser } from "@/lib/auth";
+import { getRemainingUsage, getUsageForUser } from "@/lib/usageLimiter";
 
 type Props = {
   onSelectDemo?: (demoCaseId: string, autoPresent?: boolean) => void;
 };
 
 export function AgencyDemoMode({ onSelectDemo }: Props) {
-  const [session, setSession] = useState<AgencySession | null>(null);
-  const [usage, setUsage] = useState<DailyUsage | null>(null);
-  const [userId, setUserId] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
+  const [user, setUser] = useState<ZhikeUser | null>(null);
   const [actionMessage, setActionMessage] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState(agencyDemoCases[0].id);
 
@@ -35,49 +23,19 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
 
   useEffect(() => {
     function refresh() {
-      const nextSession = readAgencySession();
-      setSession(nextSession);
-      setUsage(nextSession ? readDailyUsage(nextSession.userId) : null);
+      setUser(getCurrentUser());
     }
 
     refresh();
-    window.addEventListener(agencyUsageChangedEvent, refresh);
+    window.addEventListener("zhike-auth-changed", refresh);
+    window.addEventListener("zhike-usage-changed", refresh);
     window.addEventListener("storage", refresh);
     return () => {
-      window.removeEventListener(agencyUsageChangedEvent, refresh);
+      window.removeEventListener("zhike-auth-changed", refresh);
+      window.removeEventListener("zhike-usage-changed", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
-
-  function login() {
-    const account = validateAgencyLogin(userId, password);
-    if (!account) {
-      setLoginError("账号或密码不正确，请联系项目负责人获取代理商测试账号。");
-      return;
-    }
-
-    const nextSession: AgencySession = {
-      userId: account.userId,
-      role: account.role,
-      loginAt: new Date().toISOString()
-    };
-    if (!writeAgencySession(nextSession)) {
-      setLoginError("浏览器无法保存登录状态，请检查隐私模式或站点存储权限。");
-      return;
-    }
-    readDailyUsage(nextSession.userId);
-    setPassword("");
-    setLoginError("");
-    setActionMessage(`已登录 ${nextSession.userId}，Demo Classroom 已就绪。`);
-    window.setTimeout(() => {
-      document.getElementById("demo-classroom")?.scrollIntoView({ behavior: "smooth" });
-    }, 80);
-  }
-
-  function logout() {
-    clearAgencySession();
-    setActionMessage("已退出代理商测试账号。");
-  }
 
   function startDemo(autoPresent = false) {
     onSelectDemo?.(selectedCase.id, autoPresent);
@@ -110,57 +68,23 @@ export function AgencyDemoMode({ onSelectDemo }: Props) {
               Demo 课堂内容永久免费查看；真实 AI 教学生成每日 20 次，用于控制高频调用，同时保留完整课堂体验。
             </p>
 
-            {session && usage ? (
+            {user ? (
               <div className="mt-5 rounded-lg bg-slate-950 p-4 text-white">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-cyan-200">
-                      已登录：{session.userId}
+                      当前账号：{user.displayName}
                     </p>
                     <p className="mt-1 text-2xl font-semibold">
-                      今日 AI 剩余次数：{usage.remainingToday} / {usage.dailyLimit}
+                      今日 AI 剩余次数：{getRemainingUsage(user)} / {getUsageForUser(user).limit}
                     </p>
+                    <p className="mt-1 text-sm text-cyan-50/70">水印：{user.watermark}</p>
                   </div>
-                  <Button type="button" variant="secondary" onClick={logout}>
-                    <LogOut className="h-4 w-4" />
-                    退出
-                  </Button>
                 </div>
               </div>
             ) : (
-              <div className="mt-5 rounded-lg bg-slate-50 p-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm font-semibold text-slate-700">
-                    代理商账号
-                    <input
-                      value={userId}
-                      onChange={(event) => setUserId(event.target.value)}
-                      className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500"
-                      placeholder="请输入账号"
-                      autoComplete="username"
-                    />
-                  </label>
-                  <label className="text-sm font-semibold text-slate-700">
-                    密码
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500"
-                      placeholder="请输入密码"
-                      autoComplete="current-password"
-                    />
-                  </label>
-                </div>
-                <Button type="button" onClick={login} className="mt-4 bg-slate-950 text-white hover:bg-slate-800">
-                  <LockKeyhole className="h-4 w-4" />
-                  登录并进入 Demo Classroom
-                </Button>
-                {loginError ? (
-                  <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {loginError}
-                  </p>
-                ) : null}
+              <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+                正在读取当前登录账号...
               </div>
             )}
           </div>

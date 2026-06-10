@@ -1,0 +1,11 @@
+[
+  {
+    "id": "deepseek_default",
+    "provider": "deepseek",
+    "name": "DeepSeek 主Key",
+    "apiKey": "sk-example-do-not-use",
+    "baseUrl": "https://api.deepseek.com",
+    "model": "deepseek-chat",
+    "enabled": true
+  }
+]

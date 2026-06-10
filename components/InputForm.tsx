@@ -46,11 +46,10 @@ import { TrialSummaryPage } from "@/components/TrialSummaryPage";
 import { getAgencyDemoPlan } from "@/demoData/agencyDemo";
 import { aiFallbackMessage } from "@/lib/aiFallback";
 import { normalizeClassroomPackage, type ClassroomPackage } from "@/lib/classroomPackage";
-import {
-  consumeDailyUsage,
-  readAgencySession
-} from "@/lib/agencyUsage";
+import { getCurrentUser, type ZhikeUser } from "@/lib/auth";
 import { logError, logInfo, logWarn } from "@/lib/localLogs";
+import { consumeUsage } from "@/lib/usageLimiter";
+import { appendWatermark } from "@/lib/watermark";
 import {
   getSubjectStyleOptions,
   lessonTemplates,
@@ -242,6 +241,7 @@ export function InputForm() {
   const [actionMessage, setActionMessage] = useState("");
   const [classroomPackage, setClassroomPackage] = useState<ClassroomPackage | null>(null);
   const [parseMode, setParseMode] = useState("");
+  const [currentUser, setCurrentUser] = useState<ZhikeUser | null>(null);
 
   const canCopy = useMemo(() => Boolean(plan), [plan]);
   const paceSummary = useMemo(
@@ -322,6 +322,15 @@ export function InputForm() {
     await generateClassroomPackage(form, true);
   }
 
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+    function refreshUser() {
+      setCurrentUser(getCurrentUser());
+    }
+    window.addEventListener("zhike-auth-changed", refreshUser);
+    return () => window.removeEventListener("zhike-auth-changed", refreshUser);
+  }, []);
+
   async function generateClassroomPackage(nextForm: FormState, shouldConsumeUsage = true) {
     setLoading(true);
     setError("");
@@ -343,25 +352,34 @@ export function InputForm() {
       }
 
       if (shouldConsumeUsage) {
-        const session = readAgencySession();
-        if (!session) {
+        const user = currentUser || getCurrentUser();
+        if (!user) {
           setUsageLimitReached(true);
-          throw new Error("请先登录代理商测试账号，再使用 AI 生成。Demo 课堂内容仍可永久免费查看。");
+          throw new Error("请先登录智课 AI 账号，再使用 AI 生成。Demo 课堂内容仍可继续查看。");
         }
 
-        const consumeResult = consumeDailyUsage(session.userId);
+        const consumeResult = consumeUsage(user);
         if (!consumeResult.ok) {
           setUsageLimitReached(true);
-          throw new Error("今日 AI 体验次数已用完。Demo 课堂内容仍可继续查看和全屏演示。");
+          throw new Error("今日 AI 生成次数已用完，请联系管理员。Demo 课堂内容仍可继续查看和全屏演示。");
         }
       }
+
+      const user = currentUser || getCurrentUser();
 
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(nextForm)
+        body: JSON.stringify({
+          ...nextForm,
+          userId: user?.id,
+          apiKeyId: user?.apiKeyId,
+          modelProvider: user?.modelProvider,
+          modelName: user?.modelName,
+          watermark: user?.watermark
+        })
       });
 
       const data = await response.json();
@@ -390,7 +408,7 @@ export function InputForm() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "生成失败，请稍后重试。";
       const isUsageOrLoginError =
-        message.includes("登录代理商") || message.includes("体验次数");
+        message.includes("登录智课") || message.includes("生成次数");
 
       if (isUsageOrLoginError) {
         setError(message);
@@ -458,13 +476,27 @@ export function InputForm() {
   async function copyAll() {
     if (!plan) return;
     try {
-      await navigator.clipboard.writeText(planToText(plan));
+      await navigator.clipboard.writeText(appendWatermark(planToText(plan), currentUser?.watermark));
       setCopied(true);
       setActionMessage("课堂包内容已复制。");
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setActionMessage("复制失败，请检查浏览器剪贴板权限。");
     }
+  }
+
+  function exportPlan(format: "txt" | "md" | "doc") {
+    if (!plan) return;
+    const content = appendWatermark(planToText(plan), currentUser?.watermark);
+    const mime = format === "md" ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8";
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `智课AI-${form.subject}-${form.topic}.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setActionMessage(`已导出 ${format.toUpperCase()} 文件，内容已附加账号水印。`);
   }
 
   async function startPresentation() {
@@ -624,6 +656,15 @@ export function InputForm() {
               >
                 <Clipboard className="h-4 w-4" />
                 {copied ? "已复制" : "复制全部"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => exportPlan("txt")} disabled={!canCopy}>
+                导出 TXT
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => exportPlan("md")} disabled={!canCopy}>
+                导出 MD
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => exportPlan("doc")} disabled={!canCopy}>
+                导出 Word
               </Button>
             </div>
           </div>
